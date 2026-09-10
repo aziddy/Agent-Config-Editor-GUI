@@ -1,0 +1,34 @@
+{
+  "env": {
+    "GITHUB_PERSONAL_ACCESS_TOKEN": "REDACTED_TOKEN"
+  },
+  "model": "opus",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          { "type": "command", "command": "echo pre-bash", "timeout": 30 }
+        ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          { "type": "command", "command": "echo pre-any" }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          { "type": "command", "command": "echo start-1" },
+          { "type": "command", "command": "echo start-2", "timeout": 5 }
+        ]
+      }
+    ]
+  },
+  "enabledPlugins": {
+    "demo@test-mkt": true,
+    "ghost@unknown-mkt": true
+  }
+}

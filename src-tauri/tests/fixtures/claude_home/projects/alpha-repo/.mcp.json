@@ -1,0 +1,21 @@
+{
+  "mcpServers": {
+    "approved-srv": {
+      "type": "http",
+      "url": "https://approved.example.com/mcp",
+      "bearer_token_env_var": "APPROVED_TOKEN",
+      "tool_timeout_sec": 120
+    },
+    "blocked-srv": {
+      "command": "npx",
+      "args": ["-y", "blocked-server"]
+    },
+    "pending-srv": {
+      "command": "node",
+      "args": ["server.js"],
+      "env": {
+        "API_TOKEN": "REDACTED_TOKEN"
+      }
+    }
+  }
+}

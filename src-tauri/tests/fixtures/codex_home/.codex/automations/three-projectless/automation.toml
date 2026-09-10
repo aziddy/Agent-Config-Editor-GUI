@@ -1,0 +1,14 @@
+version = 1
+id = "three-projectless"
+kind = "cron"
+name = "Three projectless"
+prompt = "Projectless automation."
+status = "PAUSED"
+rrule = "FREQ=WEEKLY;BYDAY=MO;BYHOUR=9;BYMINUTE=0;BYSECOND=0"
+model = "gpt-5.5"
+reasoning_effort = "xhigh"
+execution_environment = "local"
+target = { type = "projectless" }
+cwds = ["~"]
+created_at = 1785269927148
+updated_at = 1787595674262

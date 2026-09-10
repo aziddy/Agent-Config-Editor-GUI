@@ -1,0 +1,27 @@
+{
+  "hooks" : {
+    "PreToolUse" : [
+      {
+        "hooks" : [
+          {
+            "command" : "\/hooks\/pre-tool-use.sh",
+            "timeout" : 5,
+            "type" : "command"
+          }
+        ]
+      }
+    ],
+    "Stop" : [
+      {
+        "matcher" : "*",
+        "hooks" : [
+          {
+            "command" : "\/hooks\/stop.sh",
+            "timeout" : 5,
+            "type" : "command"
+          }
+        ]
+      }
+    ]
+  }
+}

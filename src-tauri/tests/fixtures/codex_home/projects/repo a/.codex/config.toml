@@ -1,0 +1,6 @@
+# Default model for trusted Codex sessions in this repository.
+model = "gpt-6-astra"
+
+[mcp_servers.proj-local]
+command = "node"
+args = ["server.mjs"]

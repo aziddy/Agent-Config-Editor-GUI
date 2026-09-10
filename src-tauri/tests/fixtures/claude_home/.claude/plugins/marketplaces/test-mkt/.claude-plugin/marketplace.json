@@ -1,0 +1,19 @@
+{
+  "name": "test-mkt",
+  "owner": { "name": "Test Owner" },
+  "plugins": [
+    {
+      "name": "demo",
+      "description": "Demo plugin from the catalog",
+      "category": "testing",
+      "homepage": "https://example.com/demo",
+      "author": { "name": "Demo Author" },
+      "source": "./plugins/demo"
+    },
+    {
+      "name": "proj-plug",
+      "description": "Project-only plugin that is not installed",
+      "source": "./plugins/proj-plug"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+name = "reviewer"
+description = "Review diffs on gpt-5.6-terra with high reasoning."
+model = "gpt-5.6-terra"
+model_reasoning_effort = "high"
+developer_instructions = """
+Review the diff carefully. Do not delegate.
+
+Report only real bugs with file and line.
+"""
+
+[[skills.config]]
+path = "/nonexistent/skills/hidden/SKILL.md"
+enabled = false

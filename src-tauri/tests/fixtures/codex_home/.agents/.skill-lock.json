@@ -1,0 +1,15 @@
+{
+  "version": 3,
+  "skills": {
+    "locked": {
+      "source": "example/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/example/skills.git",
+      "skillPath": "skills/locked/SKILL.md",
+      "skillFolderHash": "0000000000000000000000000000000000000000",
+      "installedAt": "2026-08-21T03:12:40.129Z",
+      "updatedAt": "2026-08-21T03:12:40.129Z"
+    }
+  },
+  "dismissed": {}
+}

@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "demo-api": {
+      "type": "http",
+      "url": "https://demo.example.com/mcp",
+      "oauth_resource": "https://demo.example.com/mcp",
+      "note": "Wrapped shape, as observed for Codex plugins."
+    },
+    "demo-local": {
+      "command": "./bin/demo-launcher",
+      "args": ["mcp"],
+      "cwd": ".",
+      "env_vars": ["CODEX_HOME"],
+      "enabled": true,
+      "startup_timeout_sec": 120
+    }
+  }
+}

@@ -1,0 +1,50 @@
+[package]
+name = "agent-config-editor"
+version = "0.1.0"
+description = "Desktop editor for Claude Code and Codex CLI configuration"
+authors = ["aziddy"]
+edition = "2021"
+rust-version = "1.85"
+
+[lib]
+name = "agent_config_editor_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "agent-config-editor"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order", "float_roundtrip"] }
+toml_edit = "0.25"
+serde_yaml_ng = "0.10"
+sha2 = "0.10"
+hex = "0.4"
+dirs = "6"
+thiserror = "2"
+notify = "8"
+notify-debouncer-mini = "0.6"
+tempfile = "3"
+walkdir = "2"
+similar = "2"
+tokio = { version = "1", features = ["process", "time", "rt-multi-thread", "macros", "sync"] }
+chrono = "0.4"
+log = "0.4"
+env_logger = "0.11"
+
+[dev-dependencies]
+pretty_assertions = "1"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true

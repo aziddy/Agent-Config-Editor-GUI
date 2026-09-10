@@ -1,0 +1,16 @@
+{
+  "name": "demo",
+  "version": "1.0.0",
+  "description": "Demo plugin fixture with a skill, a command and two MCP servers.",
+  "author": {
+    "name": "Fixture Author",
+    "url": "https://example.com/"
+  },
+  "homepage": "https://example.com/demo",
+  "license": "MIT",
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Demo"
+  }
+}

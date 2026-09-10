@@ -1,0 +1,15 @@
+{
+  "enabledPlugins": {
+    "proj-plug@test-mkt": true
+  },
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          { "type": "command", "command": "echo stop" }
+        ]
+      }
+    ]
+  }
+}
