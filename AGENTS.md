@@ -23,6 +23,9 @@ Requires Node 20+, pnpm 9.15, Rust 1.85+ and the Tauri macOS prerequisites (Xcod
 | `pnpm install` | Install dependencies. |
 | `pnpm tauri dev` | Run the app with Vite HMR. |
 | `ACE_HOME=$PWD/.sandbox-home pnpm tauri dev` | Run against a copy of the real config (see Sandbox). |
+| `pnpm dev:static:prepare` | Build the static debug executable (`tauri build --debug --no-bundle`, frontend embedded); rerun after source changes. |
+| `pnpm dev:static` | Launch the prepared executable without Vite or cargo watchers. |
+| `pnpm dev:static:fresh` | Prepare, then launch. `ACE_HOME` and the other env vars apply here too. |
 | `pnpm typecheck` / `pnpm lint` / `pnpm test` | TypeScript, Biome, Vitest. |
 | `cargo test --manifest-path src-tauri/Cargo.toml` | Rust unit + integration tests. |
 | `cargo test --manifest-path src-tauri/Cargo.toml -- --ignored --nocapture` | Scan the real machine (or `ACE_HOME`) and print counts, read-only. |

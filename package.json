@@ -7,7 +7,11 @@
   "scripts": {
     "dev": "tauri dev",
     "dev:vite": "vite",
+    "dev:static": "cd src-tauri && exec ./target/debug/agent-config-editor",
+    "dev:static:prepare": "pnpm build:debug",
+    "dev:static:fresh": "pnpm dev:static:prepare && cd src-tauri && exec ./target/debug/agent-config-editor",
     "build": "tsc --noEmit && vite build",
+    "build:debug": "tauri build --debug --no-bundle",
     "tauri": "tauri",
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",

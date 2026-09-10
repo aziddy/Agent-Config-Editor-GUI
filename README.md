@@ -14,7 +14,9 @@ Built with Tauri 2 (Rust) + React/TypeScript. macOS first; Linux builds too.
 
 ```sh
 pnpm install
-pnpm tauri dev
+pnpm tauri dev              # Vite HMR + cargo rebuilds
+pnpm dev:static:fresh       # build a static debug binary and run it, no watchers
+pnpm dev:static             # relaunch the last static build
 ```
 
 Run against a **copy** of your real configuration first (recommended after any change to the write path):
