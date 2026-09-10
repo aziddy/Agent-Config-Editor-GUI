@@ -184,9 +184,7 @@ mod tests {
     #[test]
     fn local_project_id_is_sha256_prefix_of_path() {
         assert_eq!(
-            local_project_id(Path::new(
-                "/Users/me/Documents/GitHub/my-repo"
-            )),
+            local_project_id(Path::new("/Users/me/Documents/GitHub/my-repo")),
             "local-b65220693b3896ad8555b34b3ede0186"
         );
     }
