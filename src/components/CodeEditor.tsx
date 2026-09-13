@@ -4,7 +4,7 @@ import { yaml } from "@codemirror/lang-yaml";
 import { StreamLanguage } from "@codemirror/language";
 import { toml } from "@codemirror/legacy-modes/mode/toml";
 import { githubDark, githubLight } from "@uiw/codemirror-theme-github";
-import CodeMirror, { EditorView, type Extension } from "@uiw/react-codemirror";
+import CodeMirror, { type Extension } from "@uiw/react-codemirror";
 import { useEffect, useMemo, useState } from "react";
 import type { Language } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -45,10 +45,11 @@ interface Props {
 
 export function CodeEditor({ value, language, onChange, readOnly, className, minHeight }: Props) {
   const dark = useIsDark();
-  const extensions = useMemo(() => [...languageExtension(language), EditorView.lineWrapping], [language]);
+  const extensions = useMemo(() => languageExtension(language), [language]);
   return (
-    <div className={cn("code-editor overflow-hidden rounded-md border", className)}>
+    <div className={cn("code-editor min-w-0 overflow-hidden rounded-md border", className)}>
       <CodeMirror
+        className="h-full min-h-0"
         value={value}
         height="100%"
         minHeight={minHeight ?? "200px"}
