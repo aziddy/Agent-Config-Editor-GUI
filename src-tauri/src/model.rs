@@ -200,6 +200,14 @@ pub enum McpTransport {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct CodexSkillInvocation {
+    pub path: String,
+    pub base_hash: Option<String>,
+    pub allow_implicit_invocation: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CodexMcpRuntime {
     pub enabled: bool,
     pub disabled_reason: Option<String>,
@@ -374,6 +382,78 @@ pub struct DuplicateGroup {
     pub project_roots: Vec<String>,
 }
 
+/// Desktop-owned run metadata. Viewing a run never changes its review/read state.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationRun {
+    pub thread_id: String,
+    pub status: String,
+    pub read_at: Option<i64>,
+    pub title: String,
+    pub summary: Option<String>,
+    pub source_cwd: Option<String>,
+    pub created_at: i64,
+    pub updated_at: i64,
+    pub archived_reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationRunPage {
+    pub runs: Vec<AutomationRun>,
+    pub next_cursor: Option<String>,
+    pub storage_available: bool,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum RunItemKind {
+    User,
+    Assistant,
+    Activity,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RunConversationItem {
+    pub id: String,
+    pub position: i64,
+    pub version: i64,
+    pub kind: RunItemKind,
+    pub label: String,
+    pub text: Option<String>,
+    pub phase: Option<String>,
+    pub created_at: Option<i64>,
+    pub next_cursor: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationRunConversation {
+    pub run: AutomationRun,
+    pub items: Vec<RunConversationItem>,
+    pub before_cursor: Option<i64>,
+    pub after_cursor: i64,
+    pub has_more_after: bool,
+    /// `local`, `saved`, or `unavailable`.
+    pub availability: String,
+    pub notices: Vec<String>,
+    pub execution_status: Option<String>,
+    pub duration_ms: Option<i64>,
+    pub history_source: String,
+    pub removed_item_ids: Vec<String>,
+    pub reset: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationRunActivity {
+    pub details: Value,
+    pub text: String,
+    pub next_cursor: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectRef {
@@ -477,6 +557,9 @@ pub enum Mutation {
     Frontmatter {
         changes: Vec<FrontmatterChange>,
         body: Option<String>,
+    },
+    CodexSkillPolicy {
+        allow_implicit_invocation: bool,
     },
     RawText,
     CreateFile,

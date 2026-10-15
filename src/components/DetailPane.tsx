@@ -1,7 +1,7 @@
 import { Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { AgentBadge } from "@/components/AgentBadge";
-import { FilesTab } from "@/components/FilesTab";
+import { FileEditor } from "@/components/FileEditor";
 import { PathActions } from "@/components/PathActions";
 import { RawFileEditor } from "@/components/RawFileEditor";
 import { ScopeBadge } from "@/components/ScopeBadge";
@@ -12,6 +12,7 @@ import { useRequestPlan } from "@/lib/mutations";
 import { rpc } from "@/lib/rpc";
 import { useSelectedEntity } from "@/lib/useEntities";
 import { AutomationDetail } from "@/screens/detail/AutomationDetail";
+import { AutomationRuns } from "@/screens/detail/AutomationRuns";
 import { FrontmatterEntityDetail } from "@/screens/detail/FrontmatterEntityDetail";
 import { HookDetail } from "@/screens/detail/HookDetail";
 import { McpDetail } from "@/screens/detail/McpDetail";
@@ -53,23 +54,28 @@ function deletablePath(entity: AnyEntity): string | null {
 
 export function DetailPane() {
   const entity = useSelectedEntity();
-  const tab = useUiStore((s) => s.detailTab);
-  const setTab = useUiStore((s) => s.setDetailTab);
-  const requestPlan = useRequestPlan();
-  const [rawPath, setRawPath] = useState<string | null>(null);
-  const id = entity?.data.id ?? null;
-  // biome-ignore lint/correctness/useExhaustiveDependencies: reset the raw-file override whenever the selection changes
-  useEffect(() => setRawPath(null), [id]);
+  const selectedId = useUiStore((s) => s.selectedId);
+  const [retained, setRetained] = useState(entity);
+  // A filesystem rescan may remove the entity. Keep its open buffer until the user leaves it.
+  if (entity && entity !== retained) setRetained(entity);
+  const visible = entity ?? (retained?.data.id === selectedId ? retained : null);
 
-  if (!entity) {
+  if (!visible) {
     return (
       <div className="flex h-full items-center justify-center p-8 text-center text-sm text-muted-foreground">
         Select an item to see its details, edit it, or jump to its files.
       </div>
     );
   }
+  return <SelectedDetailPane key={visible.data.id} entity={visible} unavailable={!entity} />;
+}
 
-  const file = rawPath ?? entityFile(entity);
+function SelectedDetailPane({ entity, unavailable }: { entity: AnyEntity; unavailable: boolean }) {
+  const tab = useUiStore((s) => s.detailTab);
+  const setTab = useUiStore((s) => s.setDetailTab);
+  const requestNavigation = useUiStore((s) => s.requestNavigation);
+  const requestPlan = useRequestPlan();
+  const [file, setFile] = useState(() => entityFile(entity));
   const dir = entityDir(entity);
   const description = "description" in entity.data ? entity.data.description : null;
   const pluginHint =
@@ -78,8 +84,14 @@ export function DetailPane() {
       : undefined;
   const deletable = deletablePath(entity);
   const openFile = (p: string) => {
-    setRawPath(p);
-    setTab("raw");
+    if (p === file) {
+      setTab("editor");
+      return;
+    }
+    void requestNavigation(() => {
+      setFile(p);
+      setTab("editor");
+    });
   };
 
   return (
@@ -95,7 +107,7 @@ export function DetailPane() {
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-1">
-            <PathActions path={dir ?? file} />
+            <PathActions path={dir ?? file} size="icon" />
             {deletable && (
               <Button
                 variant="ghost"
@@ -114,15 +126,34 @@ export function DetailPane() {
           onValueChange={setTab}
           items={[
             { value: "overview", label: "Overview" },
-            { value: "raw", label: "Raw file", disabled: !file },
-            { value: "files", label: "Files", disabled: !dir },
+            ...(entity.kind === "automation" && entity.data.agent === "codex"
+              ? [{ value: "runs" as const, label: "Runs" }]
+              : []),
+            { value: "editor", label: "Editor", disabled: !file && !dir },
           ]}
         />
       </div>
-      <div className="min-h-0 flex-1 overflow-auto p-4">
+      {unavailable && (
+        <p role="alert" className="border-b px-4 py-2 text-xs text-destructive">
+          This item is no longer available on disk. Your editor buffer has been kept.
+        </p>
+      )}
+      <div hidden={tab !== "overview"} className="min-h-0 flex-1 overflow-auto p-4">
         {tab === "overview" && <Overview entity={entity} onOpenFile={openFile} />}
-        {tab === "raw" && file && <RawFileEditor key={file} path={file} readOnlyHint={pluginHint} />}
-        {tab === "files" && dir && <FilesTab root={dir} onOpenFile={openFile} />}
+      </div>
+      {entity.kind === "automation" && entity.data.agent === "codex" && (
+        <div hidden={tab !== "runs"} className="min-h-0 flex-1">
+          <AutomationRuns automation={entity.data} active={tab === "runs"} />
+        </div>
+      )}
+      <div hidden={tab !== "editor"} className="min-h-0 flex-1 p-3">
+        <FileEditor root={dir} selectedPath={file} onOpenFile={openFile}>
+          {file ? (
+            <RawFileEditor key={file} path={file} readOnlyHint={pluginHint} />
+          ) : (
+            <p className="p-3 text-sm text-muted-foreground">Select a file to edit.</p>
+          )}
+        </FileEditor>
       </div>
     </div>
   );

@@ -19,6 +19,31 @@ fn apply(homes: &Homes, backups: &BackupStore, plan: &agent_config_editor_lib::m
 
 #[test]
 #[ignore]
+fn codex_noop_save_is_byte_identical() {
+    let homes = Homes::detect().unwrap();
+    assert!(homes.sandbox, "refusing to run outside ACE_HOME sandbox");
+    let config = homes.codex_home.join("config.toml");
+    let original = fs::read_to_string(&config).unwrap();
+    let plan = actions::plan_save_file_text(
+        &homes,
+        &fsutil::display(&config),
+        original.clone(),
+        Some(fsutil::sha256_hex(original.as_bytes())),
+    )
+    .unwrap();
+    let tmp = tempfile::tempdir().unwrap();
+    let backups = BackupStore::new(tmp.path().to_path_buf(), 5);
+    apply(&homes, &backups, &plan);
+    assert!(
+        fs::read_to_string(&config).unwrap() == original,
+        "config bytes changed during no-op save"
+    );
+    assert_eq!(fsutil::mode_of(&fs::metadata(&config).unwrap()), 0o600);
+    println!("Codex no-op save is byte-identical; mode 600");
+}
+
+#[test]
+#[ignore]
 fn codex_toggle_round_trips_byte_identical() {
     let homes = Homes::detect().unwrap();
     assert!(homes.sandbox, "refusing to run outside ACE_HOME sandbox");

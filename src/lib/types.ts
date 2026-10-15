@@ -78,6 +78,12 @@ export interface CodexMcpRuntime {
   transportType: string | null;
 }
 
+export interface CodexSkillInvocation {
+  path: string;
+  baseHash: string | null;
+  allowImplicitInvocation: boolean;
+}
+
 export interface McpServer {
   id: string;
   name: string;
@@ -208,6 +214,58 @@ export interface DuplicateGroup {
   projectRoots: string[];
 }
 
+export interface AutomationRun {
+  threadId: string;
+  status: string;
+  readAt: number | null;
+  title: string;
+  summary: string | null;
+  sourceCwd: string | null;
+  createdAt: number;
+  updatedAt: number;
+  archivedReason: string | null;
+}
+
+export interface AutomationRunPage {
+  runs: AutomationRun[];
+  nextCursor: string | null;
+  storageAvailable: boolean;
+  warnings: string[];
+}
+
+export interface RunConversationItem {
+  id: string;
+  position: number;
+  version: number;
+  kind: "user" | "assistant" | "activity";
+  label: string;
+  text: string | null;
+  phase: string | null;
+  createdAt: number | null;
+  nextCursor: string | null;
+}
+
+export interface AutomationRunConversation {
+  run: AutomationRun;
+  items: RunConversationItem[];
+  beforeCursor: number | null;
+  afterCursor: number;
+  hasMoreAfter: boolean;
+  availability: "local" | "saved" | "unavailable";
+  notices: string[];
+  executionStatus: string | null;
+  durationMs: number | null;
+  historySource: string;
+  removedItemIds: string[];
+  reset: boolean;
+}
+
+export interface AutomationRunActivity {
+  details: JsonValue;
+  text: string;
+  nextCursor: string | null;
+}
+
 export interface ProjectRef {
   root: string;
   trackedBy: Agent[];
@@ -270,6 +328,7 @@ export type Mutation =
   | { type: "tomlSkillsConfig"; skillPath: string; skillName: string | null; enabled: boolean }
   | { type: "tomlAutomation"; patch: JsonValue }
   | { type: "frontmatter"; changes: FrontmatterChange[]; body: string | null }
+  | { type: "codexSkillPolicy"; allowImplicitInvocation: boolean }
   | { type: "rawText" }
   | { type: "createFile" }
   | { type: "deleteFile" };

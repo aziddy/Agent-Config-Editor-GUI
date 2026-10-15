@@ -6,7 +6,8 @@ use crate::actions::{
 use crate::error::{AppError, AppResult};
 use crate::fsutil::{self, display, read_text_with_meta};
 use crate::model::{
-    Agent, AppSettings, ApplyResult, BackupInfo, CodexMcpRuntime, DirEntryInfo, FileText,
+    Agent, AppSettings, ApplyResult, AutomationRunActivity, AutomationRunConversation,
+    AutomationRunPage, BackupInfo, CodexMcpRuntime, CodexSkillInvocation, DirEntryInfo, FileText,
     FrontmatterChange, Mutation, Scope, Snapshot, WritePlan,
 };
 use crate::writeplan::{self, ApplyCtx, PlanInput};
@@ -24,6 +25,52 @@ fn settings_of(state: &State<'_, AppState>) -> AppResult<AppSettings> {
         .lock()
         .map_err(|_| AppError::conflict("settings lock poisoned"))?
         .clone())
+}
+
+#[tauri::command]
+pub async fn list_automation_runs(
+    state: State<'_, AppState>,
+    id: String,
+    cursor: Option<String>,
+) -> AppResult<AutomationRunPage> {
+    let homes = state.homes.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        codex::automation_runs::list_runs(&homes, &id, cursor.as_deref())
+    })
+    .await
+    .map_err(|_| AppError::conflict("Run-history reader could not finish"))?
+}
+
+#[tauri::command]
+pub async fn get_automation_run(
+    state: State<'_, AppState>,
+    id: String,
+    thread_id: String,
+    before: Option<i64>,
+    after: Option<i64>,
+) -> AppResult<AutomationRunConversation> {
+    let homes = state.homes.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        codex::automation_runs::conversation(&homes, &id, &thread_id, before, after)
+    })
+    .await
+    .map_err(|_| AppError::conflict("Conversation reader could not finish"))?
+}
+
+#[tauri::command]
+pub async fn get_automation_run_activity(
+    state: State<'_, AppState>,
+    id: String,
+    thread_id: String,
+    item_id: String,
+    cursor: Option<String>,
+) -> AppResult<AutomationRunActivity> {
+    let homes = state.homes.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        codex::automation_runs::activity(&homes, &id, &thread_id, &item_id, cursor.as_deref())
+    })
+    .await
+    .map_err(|_| AppError::conflict("Activity reader could not finish"))?
 }
 
 #[tauri::command]
@@ -97,6 +144,26 @@ pub fn preview_set_skill_enabled(
     enabled: bool,
 ) -> AppResult<WritePlan> {
     actions::plan_set_skill_enabled(&state.homes, &skill_id, enabled)
+}
+
+#[tauri::command]
+pub fn get_codex_skill_invocation(skill_id: String) -> AppResult<CodexSkillInvocation> {
+    actions::get_codex_skill_invocation(&skill_id)
+}
+
+#[tauri::command]
+pub fn preview_set_codex_skill_invocation(
+    state: State<'_, AppState>,
+    skill_id: String,
+    allow_implicit_invocation: bool,
+    base_hash: Option<String>,
+) -> AppResult<WritePlan> {
+    actions::plan_set_codex_skill_invocation(
+        &state.homes,
+        &skill_id,
+        allow_implicit_invocation,
+        base_hash,
+    )
 }
 
 #[tauri::command]

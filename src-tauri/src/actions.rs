@@ -3,7 +3,9 @@
 use crate::error::{AppError, AppResult};
 use crate::fsutil::{display, read_text_opt, Homes};
 use crate::markdown::frontmatter;
-use crate::model::{Agent, ExtraFile, FrontmatterChange, Mutation, Scope, WritePlan};
+use crate::model::{
+    Agent, CodexSkillInvocation, ExtraFile, FrontmatterChange, Mutation, Scope, WritePlan,
+};
 use crate::writeplan::{self, build, json_array_add, json_array_remove, pointer, PlanInput};
 use serde::Deserialize;
 use serde_json::{Map, Value};
@@ -652,6 +654,43 @@ pub fn plan_set_skill_enabled(
             name.unwrap_or_else(|| display(&skill_path))
         ),
     )
+}
+
+fn codex_skill_policy_path(skill_id: &str) -> AppResult<PathBuf> {
+    let skill_path = path_from_id(skill_id, "skill")?;
+    if skill_path.file_name().and_then(|n| n.to_str()) != Some("SKILL.md") || !skill_path.is_file()
+    {
+        return Err(AppError::not_found("skill file not found", &skill_path));
+    }
+    Ok(skill_path
+        .parent()
+        .ok_or_else(|| AppError::invalid("skill has no directory"))?
+        .join("agents/openai.yaml"))
+}
+
+pub fn get_codex_skill_invocation(skill_id: &str) -> AppResult<CodexSkillInvocation> {
+    crate::codex::skill_policy::read(&codex_skill_policy_path(skill_id)?)
+}
+
+pub fn plan_set_codex_skill_invocation(
+    homes: &Homes,
+    skill_id: &str,
+    allow_implicit_invocation: bool,
+    base_hash: Option<String>,
+) -> AppResult<WritePlan> {
+    let path = codex_skill_policy_path(skill_id)?;
+    build(PlanInput {
+        homes,
+        path: &path,
+        mutation: Mutation::CodexSkillPolicy {
+            allow_implicit_invocation,
+        },
+        description: "Update skill invocation policy".to_string(),
+        base_hash,
+        text: None,
+        mode: None,
+        extra_files: vec![],
+    })
 }
 
 pub fn plan_save_frontmatter(

@@ -1,26 +1,43 @@
 import { useMemo } from "react";
-import { entitiesOfKind, filterEntities, findEntity } from "@/lib/entities";
+import {
+  countEntitiesByKind,
+  entitiesOfKind,
+  type FilterOptions,
+  filterEntities,
+  findEntity,
+} from "@/lib/entities";
 import { useAppSettings, useSnapshot } from "@/lib/queries";
 import type { EntityKind } from "@/lib/types";
 import { useUiStore } from "@/state/uiStore";
 
-export function useFilteredEntities(kind: EntityKind) {
+function useEntityFilterOptions(): FilterOptions {
   const snapshot = useSnapshot();
   const settings = useAppSettings();
   const agentFilter = useUiStore((s) => s.agentFilter);
+  const locationFilter = useUiStore((s) => s.locationFilter);
   const search = useUiStore((s) => s.search);
   const showDuplicates = useUiStore((s) => s.showDuplicates);
-  return useMemo(() => {
-    if (!snapshot.data) return [];
-    return filterEntities(entitiesOfKind(snapshot.data, kind), {
+  return useMemo(
+    () => ({
       agent: agentFilter,
+      location: locationFilter,
       search,
       collapseDuplicates: !showDuplicates,
       showSystemSkills: settings.data?.showSystemSkills ?? false,
       showAgentsDirSkills: settings.data?.showAgentsDirSkills ?? true,
-      agentsDir: snapshot.data.homes?.agentsDir ?? null,
-    });
-  }, [snapshot.data, settings.data, kind, agentFilter, search, showDuplicates]);
+      agentsDir: snapshot.data?.homes?.agentsDir ?? null,
+    }),
+    [snapshot.data, settings.data, agentFilter, locationFilter, search, showDuplicates],
+  );
+}
+
+export function useFilteredEntities(kind: EntityKind) {
+  const snapshot = useSnapshot();
+  const options = useEntityFilterOptions();
+  return useMemo(
+    () => (snapshot.data ? filterEntities(entitiesOfKind(snapshot.data, kind), options) : []),
+    [snapshot.data, kind, options],
+  );
 }
 
 export function useSelectedEntity() {
@@ -32,13 +49,13 @@ export function useSelectedEntity() {
   );
 }
 
-/** Counts per kind honouring the agent filter only (for the sidebar). */
+/** Counts per kind honouring the list filters except text search (for the sidebar). */
 export function useKindCounts(): Record<EntityKind, number> {
   const snapshot = useSnapshot();
-  const agentFilter = useUiStore((s) => s.agentFilter);
-  const settings = useAppSettings();
+  const options = useEntityFilterOptions();
   return useMemo(() => {
-    const counts = {
+    if (snapshot.data) return countEntitiesByKind(snapshot.data, options);
+    return {
       skill: 0,
       mcpServer: 0,
       plugin: 0,
@@ -46,18 +63,6 @@ export function useKindCounts(): Record<EntityKind, number> {
       slashCommand: 0,
       hook: 0,
       automation: 0,
-    } satisfies Record<EntityKind, number>;
-    if (!snapshot.data) return counts;
-    for (const kind of Object.keys(counts) as EntityKind[]) {
-      counts[kind] = filterEntities(entitiesOfKind(snapshot.data, kind), {
-        agent: agentFilter,
-        search: "",
-        collapseDuplicates: true,
-        showSystemSkills: settings.data?.showSystemSkills ?? false,
-        showAgentsDirSkills: settings.data?.showAgentsDirSkills ?? true,
-        agentsDir: snapshot.data.homes?.agentsDir ?? null,
-      }).length;
-    }
-    return counts;
-  }, [snapshot.data, agentFilter, settings.data]);
+    };
+  }, [snapshot.data, options]);
 }

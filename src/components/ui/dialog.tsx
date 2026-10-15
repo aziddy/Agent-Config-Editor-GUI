@@ -1,5 +1,5 @@
 import { X } from "lucide-react";
-import { type ReactNode, type RefObject, useEffect, useRef } from "react";
+import { type ReactNode, type RefObject, useEffect, useId, useRef } from "react";
 import { cn } from "@/lib/utils";
 
 export interface DialogProps {
@@ -24,6 +24,8 @@ export function Dialog({
   initialFocusRef,
 }: DialogProps) {
   const ref = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
+  const descriptionId = useId();
 
   useEffect(() => {
     const el = ref.current;
@@ -56,6 +58,8 @@ export function Dialog({
   return (
     <dialog
       ref={ref}
+      aria-labelledby={title ? titleId : undefined}
+      aria-describedby={description ? descriptionId : undefined}
       className={cn(
         "backdrop:bg-black/50 backdrop:backdrop-blur-sm rounded-lg border bg-background text-foreground shadow-lg p-0 w-full max-w-md",
         className,
@@ -69,8 +73,16 @@ export function Dialog({
     >
       <div className="flex items-start justify-between p-4 pb-2">
         <div>
-          {title && <h2 className="text-lg font-semibold">{title}</h2>}
-          {description && <p className="text-sm text-muted-foreground">{description}</p>}
+          {title && (
+            <h2 id={titleId} className="text-lg font-semibold">
+              {title}
+            </h2>
+          )}
+          {description && (
+            <p id={descriptionId} className="text-sm text-muted-foreground">
+              {description}
+            </p>
+          )}
         </div>
         <button
           type="button"

@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { DiffDialog } from "@/components/DiffDialog";
 import { Sidebar } from "@/components/Sidebar";
+import { UnsavedChangesDialog } from "@/components/UnsavedChangesDialog";
 import { describeError } from "@/lib/errors";
 import { useConfigChangedListener } from "@/lib/events";
 import { useAppSettings, useSnapshot } from "@/lib/queries";
@@ -45,6 +46,7 @@ export function App() {
         )}
       </main>
       <DiffDialog />
+      <UnsavedChangesDialog />
     </div>
   );
 }

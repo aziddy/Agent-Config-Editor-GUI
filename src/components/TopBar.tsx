@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { Copy, RefreshCw, Search } from "lucide-react";
+import { Copy, List, ListCollapse, PanelLeftClose, PanelLeftOpen, RefreshCw, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { KIND_LABELS } from "@/lib/entities";
@@ -13,16 +13,52 @@ export function TopBar({ actions }: { actions?: React.ReactNode }) {
   const setSearch = useUiStore((s) => s.setSearch);
   const showDuplicates = useUiStore((s) => s.showDuplicates);
   const toggleDuplicates = useUiStore((s) => s.toggleDuplicates);
+  const sidebarCollapsed = useUiStore((s) => s.sidebarCollapsed);
+  const entityListCollapsed = useUiStore((s) => s.entityListCollapsed);
+  const toggleSidebar = useUiStore((s) => s.toggleSidebar);
+  const toggleEntityList = useUiStore((s) => s.toggleEntityList);
   const qc = useQueryClient();
   const snapshot = useSnapshot();
   const title = nav === "projects" ? "Projects" : nav === "settings" ? "Settings" : KIND_LABELS[nav].plural;
   const isEntityKind = nav !== "projects" && nav !== "settings";
+  const sidebarLabel = sidebarCollapsed ? "Expand navigation" : "Collapse navigation";
+  const listLabel = entityListCollapsed ? "Expand item list" : "Collapse item list";
+  const SidebarIcon = sidebarCollapsed ? PanelLeftOpen : PanelLeftClose;
+  const ListIcon = entityListCollapsed ? List : ListCollapse;
 
   return (
-    <div className="flex items-center gap-2 border-b px-3 py-2">
-      <h1 className="w-40 shrink-0 truncate text-sm font-semibold">{title}</h1>
+    <div className="flex shrink-0 items-center gap-2 border-b px-3 py-2">
+      <div className="flex shrink-0 items-center gap-1">
+        <Button
+          variant="ghost"
+          size="icon"
+          className={cn("h-8 w-8", sidebarCollapsed && "bg-accent")}
+          aria-label={sidebarLabel}
+          title={sidebarLabel}
+          aria-expanded={!sidebarCollapsed}
+          aria-controls="navigation-sidebar"
+          onClick={toggleSidebar}
+        >
+          <SidebarIcon className="h-4 w-4" aria-hidden="true" />
+        </Button>
+        {isEntityKind && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className={cn("h-8 w-8", entityListCollapsed && "bg-accent")}
+            aria-label={listLabel}
+            title={listLabel}
+            aria-expanded={!entityListCollapsed}
+            aria-controls="entity-list"
+            onClick={toggleEntityList}
+          >
+            <ListIcon className="h-4 w-4" aria-hidden="true" />
+          </Button>
+        )}
+      </div>
+      <h1 className="min-w-0 max-w-40 truncate text-sm font-semibold">{title}</h1>
       {isEntityKind && (
-        <div className="relative max-w-md flex-1">
+        <div className="relative min-w-0 max-w-md flex-1">
           <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={search}
@@ -32,31 +68,37 @@ export function TopBar({ actions }: { actions?: React.ReactNode }) {
           />
         </div>
       )}
-      <div className="flex-1" />
-      {isEntityKind && (
+      <div className="ml-auto flex shrink-0 items-center gap-2">
+        {isEntityKind && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className={cn("h-8 gap-1 px-2 text-xs xl:px-3", showDuplicates && "bg-accent")}
+            aria-label={showDuplicates ? "Collapse duplicates" : "Show duplicates"}
+            aria-pressed={showDuplicates}
+            title="Show every copy of duplicated entities instead of collapsing them"
+            onClick={toggleDuplicates}
+          >
+            <Copy className="h-3.5 w-3.5" />
+            <span className="hidden xl:inline">
+              {showDuplicates ? "Duplicates shown" : "Duplicates collapsed"}
+            </span>
+          </Button>
+        )}
+        {actions}
         <Button
           variant="ghost"
           size="sm"
-          className={cn("h-8 gap-1 text-xs", showDuplicates && "bg-accent")}
-          title="Show every copy of duplicated entities instead of collapsing them"
-          onClick={toggleDuplicates}
+          className="h-8 gap-1 px-2 text-xs xl:px-3"
+          onClick={() => void qc.invalidateQueries({ queryKey: queryKeys.snapshot })}
+          disabled={snapshot.isFetching}
+          title="Rescan configuration"
+          aria-label="Rescan configuration"
         >
-          <Copy className="h-3.5 w-3.5" />
-          {showDuplicates ? "Duplicates shown" : "Duplicates collapsed"}
+          <RefreshCw className={cn("h-3.5 w-3.5", snapshot.isFetching && "animate-spin")} />
+          <span className="hidden xl:inline">Rescan</span>
         </Button>
-      )}
-      {actions}
-      <Button
-        variant="ghost"
-        size="sm"
-        className="h-8 gap-1 text-xs"
-        onClick={() => void qc.invalidateQueries({ queryKey: queryKeys.snapshot })}
-        disabled={snapshot.isFetching}
-        title="Rescan configuration"
-      >
-        <RefreshCw className={cn("h-3.5 w-3.5", snapshot.isFetching && "animate-spin")} />
-        Rescan
-      </Button>
+      </div>
     </div>
   );
 }

@@ -4,12 +4,13 @@ import { DetailPane } from "@/components/DetailPane";
 import { EntityList, type Row } from "@/components/EntityList";
 import { TopBar } from "@/components/TopBar";
 import { Button } from "@/components/ui/button";
-import { type AnyEntity, basename, KIND_LABELS } from "@/lib/entities";
+import { type AnyEntity, basename, KIND_LABELS, locationFilterLabel } from "@/lib/entities";
 import { useRequestPlan } from "@/lib/mutations";
 import { rpc } from "@/lib/rpc";
 import type { EntityKind } from "@/lib/types";
 import { useFilteredEntities } from "@/lib/useEntities";
 import { NewAutomationDialog, NewEntityDialog, NewMcpDialog } from "@/screens/NewDialogs";
+import { useUiStore } from "@/state/uiStore";
 
 function useRowBuilder() {
   const requestPlan = useRequestPlan();
@@ -107,6 +108,9 @@ const CREATABLE: EntityKind[] = ["skill", "subAgent", "slashCommand", "mcpServer
 
 export function EntityScreen({ kind }: { kind: EntityKind }) {
   const filtered = useFilteredEntities(kind);
+  const location = useUiStore((s) => s.locationFilter);
+  const setLocation = useUiStore((s) => s.setLocationFilter);
+  const entityListCollapsed = useUiStore((s) => s.entityListCollapsed);
   const buildRow = useRowBuilder();
   const [creating, setCreating] = useState(false);
   const rows = filtered.map((f) => buildRow(f.entity, f.duplicateCount));
@@ -124,8 +128,31 @@ export function EntityScreen({ kind }: { kind: EntityKind }) {
         }
       />
       <div className="flex min-h-0 flex-1">
-        <div className="w-[380px] shrink-0 overflow-y-auto border-r">
-          <EntityList rows={rows} emptyText={`No ${label.plural.toLowerCase()} match.`} />
+        <div
+          id="entity-list"
+          hidden={entityListCollapsed}
+          className="w-[380px] shrink-0 overflow-y-auto border-r"
+        >
+          <EntityList
+            rows={rows}
+            emptyText={
+              location.type === "all"
+                ? `No ${label.plural.toLowerCase()} match.`
+                : `No ${label.plural.toLowerCase()} match in ${locationFilterLabel(location)}.`
+            }
+            emptyAction={
+              location.type !== "all" ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-3"
+                  onClick={() => setLocation({ type: "all" })}
+                >
+                  Clear location filter
+                </Button>
+              ) : undefined
+            }
+          />
         </div>
         <div className="min-w-0 flex-1">
           <DetailPane />

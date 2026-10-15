@@ -1,5 +1,5 @@
 import { Save } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Fragment, type ReactNode, useEffect, useState } from "react";
 import { FieldRow } from "@/components/FieldRow";
 import { ListEditor } from "@/components/ListEditor";
 import { Button } from "@/components/ui/button";
@@ -7,36 +7,51 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { type Draft, diffDraft, type FieldSpec, initialDraft, listOf, otherFields } from "@/lib/frontmatter";
-import type { Frontmatter, FrontmatterChange } from "@/lib/types";
+import type { Agent, Frontmatter, FrontmatterChange } from "@/lib/types";
 
 interface Props {
+  agent: Agent;
   frontmatter: Frontmatter;
   specs: FieldSpec[];
   disabled?: boolean;
+  fieldOverrides?: Record<string, ReactNode>;
   onSave: (changes: FrontmatterChange[]) => Promise<unknown>;
 }
 
-export function FrontmatterForm({ frontmatter, specs, disabled, onSave }: Props) {
+export function FrontmatterForm({ agent, frontmatter, specs, disabled, fieldOverrides, onSave }: Props) {
   const [draft, setDraft] = useState<Draft>(() => initialDraft(frontmatter, specs));
   const [saving, setSaving] = useState(false);
   // Reset when the underlying file changes.
   useEffect(() => setDraft(initialDraft(frontmatter, specs)), [frontmatter, specs]);
 
-  const changes = diffDraft(frontmatter, specs, draft);
+  const changes = diffDraft(frontmatter, specs, draft, agent);
   const others = otherFields(frontmatter, specs);
   const set = (key: string, value: Draft[string]) => setDraft((d) => ({ ...d, [key]: value }));
 
   return (
     <div className="space-y-3">
       {specs.map((spec) => {
+        if (fieldOverrides && spec.key in fieldOverrides) {
+          return <Fragment key={spec.key}>{fieldOverrides[spec.key]}</Fragment>;
+        }
         const v = draft[spec.key];
+        const supported = (spec.frontmatterAgents ?? spec.agents).includes(agent);
+        const fieldDisabled = disabled || !supported;
+        const help = supported
+          ? spec.help
+          : `${spec.agents.map((a) => (a === "claude" ? "Claude Code" : "Codex")).join(" and ")} only; not used by ${agent === "claude" ? "Claude Code" : "Codex"}.`;
         return (
-          <FieldRow key={spec.key} label={spec.label} help={spec.help}>
+          <FieldRow
+            key={spec.key}
+            label={spec.label}
+            help={help}
+            agents={spec.showBadges === false ? undefined : spec.agents}
+          >
             {spec.control === "text" && (
               <Input
                 value={typeof v === "string" ? v : v === undefined ? "" : String(v)}
                 placeholder={spec.placeholder}
-                disabled={disabled}
+                disabled={fieldDisabled}
                 onChange={(e) => set(spec.key, e.target.value)}
                 className="h-8 text-sm"
               />
@@ -45,7 +60,7 @@ export function FrontmatterForm({ frontmatter, specs, disabled, onSave }: Props)
               <Textarea
                 value={typeof v === "string" ? v : v === undefined ? "" : String(v)}
                 placeholder={spec.placeholder}
-                disabled={disabled}
+                disabled={fieldDisabled}
                 rows={Math.min(12, Math.max(3, String(v ?? "").split("\n").length + 1))}
                 onChange={(e) => set(spec.key, e.target.value)}
                 className="text-sm"
@@ -53,14 +68,18 @@ export function FrontmatterForm({ frontmatter, specs, disabled, onSave }: Props)
             )}
             {spec.control === "bool" && (
               <div className="pt-1.5">
-                <Switch checked={v === true} disabled={disabled} onCheckedChange={(c) => set(spec.key, c)} />
+                <Switch
+                  checked={v === true}
+                  disabled={fieldDisabled}
+                  onCheckedChange={(c) => set(spec.key, c)}
+                />
               </div>
             )}
             {spec.control === "list" && (
               <ListEditor
                 items={listOf(v)}
                 placeholder={spec.placeholder}
-                readOnly={disabled}
+                readOnly={fieldDisabled}
                 onChange={(items) => set(spec.key, items)}
               />
             )}

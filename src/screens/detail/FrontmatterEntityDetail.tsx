@@ -3,6 +3,7 @@ import { EnabledSwitch } from "@/components/EnabledSwitch";
 import { InfoRow } from "@/components/FieldRow";
 import { PluginScopeGate } from "@/components/PluginScopeGate";
 import { Badge } from "@/components/ui/badge";
+import { CodexSkillInvocationField } from "@/forms/CodexSkillInvocationField";
 import { FrontmatterForm } from "@/forms/FrontmatterForm";
 import { FIELD_SPECS, type FrontmatterKind } from "@/lib/frontmatter";
 import { useRequestPlan } from "@/lib/mutations";
@@ -85,9 +86,19 @@ export function FrontmatterEntityDetail({ entity }: { entity: Entity }) {
 
       {isMarkdown ? (
         <FrontmatterForm
+          agent={data.agent}
           frontmatter={data.frontmatter}
           specs={FIELD_SPECS[kind]}
           disabled={pluginScoped && !unlocked}
+          fieldOverrides={
+            entity.kind === "skill" && data.agent === "codex"
+              ? {
+                  "disable-model-invocation": (
+                    <CodexSkillInvocationField skill={entity.data} disabled={pluginScoped && !unlocked} />
+                  ),
+                }
+              : undefined
+          }
           onSave={(changes) =>
             requestPlan(() =>
               rpc("preview_save_frontmatter", { path: data.origin.file, changes, body: null, baseHash }),
@@ -101,8 +112,12 @@ export function FrontmatterEntityDetail({ entity }: { entity: Entity }) {
           </InfoRow>
           {entity.kind === "subAgent" && (
             <>
-              <InfoRow label="Model">{entity.data.model ?? "—"}</InfoRow>
-              <InfoRow label="Reasoning effort">{entity.data.effort ?? "—"}</InfoRow>
+              <InfoRow label="Model" agents={["claude", "codex"]}>
+                {entity.data.model ?? "—"}
+              </InfoRow>
+              <InfoRow label="Reasoning effort" agents={["codex"]}>
+                {entity.data.effort ?? "—"}
+              </InfoRow>
             </>
           )}
           <p className="text-xs text-muted-foreground">TOML-backed entity: edit it in the Raw tab.</p>

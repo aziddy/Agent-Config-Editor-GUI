@@ -12,8 +12,7 @@ import { useUiStore } from "@/state/uiStore";
 
 function ContribList({ title, ids }: { title: string; ids: string[] }) {
   const snapshot = useSnapshot();
-  const select = useUiStore((s) => s.select);
-  const setNav = useUiStore((s) => s.setNav);
+  const navigateToEntity = useUiStore((s) => s.navigateToEntity);
   if (ids.length === 0) return null;
   return (
     <div>
@@ -32,8 +31,7 @@ function ContribList({ title, ids }: { title: string; ids: string[] }) {
                 disabled={!e}
                 onClick={() => {
                   if (e) {
-                    setNav(e.kind);
-                    select(id);
+                    void navigateToEntity(e.kind, id);
                   }
                 }}
               >

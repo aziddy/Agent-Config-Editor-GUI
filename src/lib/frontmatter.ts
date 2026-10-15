@@ -1,4 +1,4 @@
-import type { Frontmatter, FrontmatterChange, JsonValue } from "./types";
+import type { Agent, Frontmatter, FrontmatterChange, JsonValue } from "./types";
 
 export type FieldControl = "text" | "textarea" | "bool" | "list";
 
@@ -6,6 +6,9 @@ export interface FieldSpec {
   key: string;
   label: string;
   control: FieldControl;
+  agents: readonly Agent[];
+  frontmatterAgents?: readonly Agent[];
+  showBadges?: boolean;
   help?: string;
   placeholder?: string;
 }
@@ -14,44 +17,96 @@ export type FrontmatterKind = "skill" | "subAgent" | "slashCommand";
 
 export const FIELD_SPECS: Record<FrontmatterKind, FieldSpec[]> = {
   skill: [
-    { key: "name", label: "Name", control: "text" },
+    { key: "name", label: "Name", control: "text", agents: ["claude", "codex"], showBadges: false },
     {
       key: "description",
       label: "Description",
       control: "textarea",
+      agents: ["claude", "codex"],
+      showBadges: false,
       help: "When the agent should use this skill.",
     },
-    { key: "allowed-tools", label: "Allowed tools", control: "list", placeholder: "Bash(git:*)" },
-    { key: "argument-hint", label: "Argument hint", control: "text", placeholder: "[issue-number]" },
+    {
+      key: "allowed-tools",
+      label: "Allowed tools",
+      control: "list",
+      agents: ["claude"],
+      placeholder: "Bash(git:*)",
+    },
+    {
+      key: "argument-hint",
+      label: "Argument hint",
+      control: "text",
+      agents: ["claude"],
+      placeholder: "[issue-number]",
+    },
     {
       key: "disable-model-invocation",
       label: "Disable model invocation",
       control: "bool",
+      agents: ["claude", "codex"],
+      frontmatterAgents: ["claude"],
       help: "Only the user can invoke it with /name.",
     },
-    { key: "user-invocable", label: "User invocable", control: "bool" },
-    { key: "model", label: "Model", control: "text", placeholder: "sonnet" },
+    { key: "user-invocable", label: "User invocable", control: "bool", agents: ["claude"] },
+    { key: "model", label: "Model", control: "text", agents: ["claude"], placeholder: "sonnet" },
   ],
   subAgent: [
-    { key: "name", label: "Name", control: "text" },
+    { key: "name", label: "Name", control: "text", agents: ["claude", "codex"], showBadges: false },
     {
       key: "description",
       label: "Description",
       control: "textarea",
+      agents: ["claude", "codex"],
       help: "When Claude should delegate to this agent.",
+      showBadges: false,
     },
-    { key: "model", label: "Model", control: "text", placeholder: "sonnet | opus | haiku | inherit" },
-    { key: "tools", label: "Tools", control: "list", placeholder: "Read" },
-    { key: "color", label: "Color", control: "text", placeholder: "green" },
-    { key: "effort", label: "Effort", control: "text", placeholder: "high" },
+    {
+      key: "model",
+      label: "Model",
+      control: "text",
+      agents: ["claude", "codex"],
+      placeholder: "sonnet | opus | haiku | inherit",
+    },
+    { key: "tools", label: "Tools", control: "list", agents: ["claude"], placeholder: "Read" },
+    { key: "color", label: "Color", control: "text", agents: ["claude"], placeholder: "green" },
+    { key: "effort", label: "Effort", control: "text", agents: ["claude"], placeholder: "high" },
   ],
   slashCommand: [
-    { key: "description", label: "Description", control: "textarea" },
-    { key: "argument-hint", label: "Argument hint", control: "text", placeholder: "[pr-number]" },
-    { key: "allowed-tools", label: "Allowed tools", control: "list", placeholder: "Bash(gh:*)" },
-    { key: "model", label: "Model", control: "text" },
-    { key: "disable-model-invocation", label: "Disable model invocation", control: "bool" },
-    { key: "hide-from-slash-command-tool", label: "Hide from slash-command tool", control: "bool" },
+    {
+      key: "description",
+      label: "Description",
+      control: "textarea",
+      agents: ["claude", "codex"],
+      showBadges: false,
+    },
+    {
+      key: "argument-hint",
+      label: "Argument hint",
+      control: "text",
+      agents: ["claude", "codex"],
+      placeholder: "[pr-number]",
+    },
+    {
+      key: "allowed-tools",
+      label: "Allowed tools",
+      control: "list",
+      agents: ["claude"],
+      placeholder: "Bash(gh:*)",
+    },
+    { key: "model", label: "Model", control: "text", agents: ["claude"] },
+    {
+      key: "disable-model-invocation",
+      label: "Disable model invocation",
+      control: "bool",
+      agents: ["claude"],
+    },
+    {
+      key: "hide-from-slash-command-tool",
+      label: "Hide from slash-command tool",
+      control: "bool",
+      agents: ["claude"],
+    },
   ],
 };
 
@@ -88,10 +143,16 @@ function same(a: JsonValue | undefined, b: JsonValue | undefined): boolean {
   return JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 }
 
-/** Changes between the original frontmatter and the draft; empty strings/lists delete the key. */
-export function diffDraft(fm: Frontmatter, specs: FieldSpec[], draft: Draft): FrontmatterChange[] {
+/** Only supported fields can change; empty strings/lists delete the key. */
+export function diffDraft(
+  fm: Frontmatter,
+  specs: FieldSpec[],
+  draft: Draft,
+  agent: Agent,
+): FrontmatterChange[] {
   const changes: FrontmatterChange[] = [];
   for (const spec of specs) {
+    if (!(spec.frontmatterAgents ?? spec.agents).includes(agent)) continue;
     const before = draftValue(fm, spec);
     let after = draft[spec.key];
     if (typeof after === "string" && after.trim() === "") after = undefined;

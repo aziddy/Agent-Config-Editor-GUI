@@ -80,6 +80,9 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::scan_all,
+            commands::list_automation_runs,
+            commands::get_automation_run,
+            commands::get_automation_run_activity,
             commands::get_file_text,
             commands::list_dir,
             commands::get_app_settings,
@@ -93,6 +96,8 @@ pub fn run() {
             commands::preview_set_mcp_enabled,
             commands::preview_set_plugin_enabled,
             commands::preview_set_skill_enabled,
+            commands::get_codex_skill_invocation,
+            commands::preview_set_codex_skill_invocation,
             commands::preview_save_frontmatter,
             commands::preview_save_automation,
             commands::preview_set_automation_status,

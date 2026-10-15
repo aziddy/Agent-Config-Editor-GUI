@@ -17,8 +17,7 @@ import { useUiStore } from "@/state/uiStore";
 export function McpDetail({ server }: { server: McpServer }) {
   const snapshot = useSnapshot();
   const requestPlan = useRequestPlan();
-  const select = useUiStore((s) => s.select);
-  const setNav = useUiStore((s) => s.setNav);
+  const navigateToEntity = useUiStore((s) => s.navigateToEntity);
   const [unlocked, setUnlocked] = useState(false);
   const [projectRoot, setProjectRoot] = useState<string>("");
   const pluginScoped = server.scope.type === "plugin";
@@ -111,8 +110,7 @@ export function McpDetail({ server }: { server: McpServer }) {
               className="font-mono text-xs underline-offset-2 hover:underline"
               onClick={() => {
                 if (providerPlugin) {
-                  setNav("plugin");
-                  select(providerPlugin.id);
+                  void navigateToEntity("plugin", providerPlugin.id);
                 }
               }}
             >

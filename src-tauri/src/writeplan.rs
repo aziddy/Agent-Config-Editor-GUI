@@ -139,6 +139,13 @@ pub fn apply_mutation(
         Mutation::Frontmatter { changes, body } => {
             frontmatter_apply(base, changes, body.as_deref(), warnings)
         }
+        Mutation::CodexSkillPolicy {
+            allow_implicit_invocation,
+        } => crate::codex::skill_policy::set_implicit_invocation(
+            base,
+            *allow_implicit_invocation,
+            path,
+        ),
         Mutation::RawText | Mutation::CreateFile | Mutation::DeleteFile => Err(AppError::invalid(
             "mutation does not derive text from the current file",
         )),

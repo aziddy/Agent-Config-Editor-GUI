@@ -41,6 +41,62 @@ export const KIND_ORDER: EntityKind[] = [
   "automation",
 ];
 
+/** Frontend browsing state, independent of an entity's on-disk scope. */
+export type LocationFilter =
+  | { type: "all" }
+  | { type: "scope"; scope: Scope["type"] }
+  | { type: "project"; root: string };
+
+export function locationFilterLabel(filter: LocationFilter): string {
+  if (filter.type === "all") return "All locations";
+  if (filter.type === "project") return `Project: ${basename(filter.root) || filter.root}`;
+  switch (filter.scope) {
+    case "user":
+      return "User";
+    case "project":
+      return "All projects";
+    case "plugin":
+      return "Plugin-provided";
+    case "system":
+      return "System";
+    case "managed":
+      return "Managed";
+  }
+}
+
+export function matchesLocation(scope: Scope, filter: LocationFilter): boolean {
+  switch (filter.type) {
+    case "all":
+      return true;
+    case "scope":
+      return scope.type === filter.scope;
+    case "project":
+      return scope.type === "project" && scope.root === filter.root;
+  }
+}
+
+export interface ProjectLocation {
+  root: string;
+  missing: boolean;
+}
+
+/** Include entity-only roots and keep missing roots available when they still own config. */
+export function projectLocations(snapshot: Snapshot, showMissing: boolean): ProjectLocation[] {
+  const projects = new Map(snapshot.projects.map((p) => [p.root, { root: p.root, missing: !p.exists }]));
+  const entityRoots = new Set<string>();
+  for (const kind of KIND_ORDER) {
+    for (const entity of entitiesOfKind(snapshot, kind)) {
+      if (entity.data.scope.type !== "project") continue;
+      const root = entity.data.scope.root;
+      entityRoots.add(root);
+      if (!projects.has(root)) projects.set(root, { root, missing: false });
+    }
+  }
+  return [...projects.values()]
+    .filter((p) => showMissing || !p.missing || entityRoots.has(p.root))
+    .sort((a, b) => basename(a.root).localeCompare(basename(b.root)) || a.root.localeCompare(b.root));
+}
+
 export function basename(path: string): string {
   const parts = path.replace(/\/+$/, "").split("/");
   return parts[parts.length - 1] ?? path;
@@ -127,7 +183,7 @@ export function entityFile(e: AnyEntity): string | null {
   }
 }
 
-/** Directory to show in the Files tab. */
+/** Root directory for the combined editor's file tree. */
 export function entityDir(e: AnyEntity): string | null {
   switch (e.kind) {
     case "skill":
@@ -173,6 +229,7 @@ export function entitySearchText(e: AnyEntity): string {
 
 export interface FilterOptions {
   agent: "all" | Agent;
+  location: LocationFilter;
   search: string;
   collapseDuplicates: boolean;
   showSystemSkills: boolean;
@@ -190,6 +247,7 @@ export function filterEntities(
   const out: { entity: AnyEntity; duplicateCount: number }[] = [];
   for (const e of entities) {
     if (opts.agent !== "all" && e.data.agent !== opts.agent) continue;
+    if (!matchesLocation(e.data.scope, opts.location)) continue;
     if (e.kind === "skill" && e.data.isSystem && !opts.showSystemSkills) continue;
     if (
       e.kind === "skill" &&
@@ -214,6 +272,23 @@ export function filterEntities(
     out.push({ entity: e, duplicateCount: 0 });
   }
   return out;
+}
+
+/** Sidebar totals share the list's filters, excluding its text search. */
+export function countEntitiesByKind(snapshot: Snapshot, opts: FilterOptions): Record<EntityKind, number> {
+  const counts: Record<EntityKind, number> = {
+    skill: 0,
+    mcpServer: 0,
+    plugin: 0,
+    subAgent: 0,
+    slashCommand: 0,
+    hook: 0,
+    automation: 0,
+  };
+  for (const kind of KIND_ORDER) {
+    counts[kind] = filterEntities(entitiesOfKind(snapshot, kind), { ...opts, search: "" }).length;
+  }
+  return counts;
 }
 
 export function findEntity(snapshot: Snapshot, id: string): AnyEntity | null {

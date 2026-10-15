@@ -18,11 +18,24 @@ export interface Row {
   warning?: string;
 }
 
-export function EntityList({ rows, emptyText }: { rows: Row[]; emptyText: string }) {
+export function EntityList({
+  rows,
+  emptyText,
+  emptyAction,
+}: {
+  rows: Row[];
+  emptyText: string;
+  emptyAction?: ReactNode;
+}) {
   const selectedId = useUiStore((s) => s.selectedId);
   const select = useUiStore((s) => s.select);
   if (rows.length === 0) {
-    return <p className="p-6 text-center text-sm text-muted-foreground">{emptyText}</p>;
+    return (
+      <div className="p-6 text-center text-sm text-muted-foreground">
+        <p>{emptyText}</p>
+        {emptyAction}
+      </div>
+    );
   }
   return (
     <ul className="divide-y">

@@ -7,7 +7,7 @@ Agent Config Editor is a Tauri 2 desktop app (macOS first, Linux second) that li
 - `src/` — React 19 + TypeScript frontend (Vite, Tailwind 3, Zustand, TanStack Query, CodeMirror 6).
   - `src/lib/types.ts` mirrors `src-tauri/src/model.rs` by hand; `src/lib/rpc.ts` is the typed map of every Tauri command.
   - `src/lib/entities.ts` — selectors, filtering and duplicate collapsing. `src/lib/frontmatter.ts`, `src/lib/rrule.ts`, `src/lib/mask.ts` — pure helpers with colocated `*.test.ts`.
-  - `src/components/` — shell (Sidebar, TopBar, EntityList, DetailPane), RawFileEditor, FilesTab, DiffDialog. `src/components/ui/` — shadcn-style primitives.
+  - `src/components/` — shell (Sidebar, TopBar, EntityList, DetailPane), combined FileEditor/FileTree, RawFileEditor, DiffDialog. `src/components/ui/` — shadcn-style primitives.
   - `src/forms/` — McpServerForm, FrontmatterForm, AutomationForm, ScheduleBuilder. `src/screens/` — EntityScreen, ProjectsScreen, SettingsScreen, NewDialogs, `detail/*` per-kind overviews.
 - `src-tauri/` — Rust backend. The webview never touches the filesystem; everything goes through commands in `src-tauri/src/commands.rs`.
   - `model.rs` unified data model · `scan.rs` snapshot assembly + dedupe · `claude/` and `codex/` readers · `markdown/frontmatter.rs` lenient frontmatter parser.
@@ -43,8 +43,13 @@ Requires Node 20+, pnpm 9.15, Rust 1.85+ and the Tauri macOS prerequisites (Xcod
 - Readers push into `ScanOut`, record every file hash, warn on parse errors and never panic on missing files. Unknown keys are passed through as `extra`.
 - Values with secret-looking keys are masked in the UI (`src/lib/mask.ts`); never log them.
 
+## Commits
+
+- Do not add AI agents as co-authors in commit messages. Never include AI-agent `Co-Authored-By` trailers, such as `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
+
 ## Validation
 
+- After completing changes to the GUI app (frontend, Rust backend, dependencies, or build configuration), run `pnpm dev:static:prepare` after validation and before handing the work back. This rebuilds the executable with the latest changes so the user's `ace` alias can launch it with `pnpm dev:static`. If the build fails, resolve the failure or report it explicitly; do not claim the prepared app is up to date.
 - `pnpm typecheck && pnpm lint && pnpm test`
 - `cargo fmt --check --manifest-path src-tauri/Cargo.toml && cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings && cargo test --manifest-path src-tauri/Cargo.toml`
 - Before touching real config after a write-path change: run against `.sandbox-home`, do a no-op save of `.codex/config.toml`, and confirm `cmp` against the original is byte-identical and `stat -f %Lp` still prints `600`.

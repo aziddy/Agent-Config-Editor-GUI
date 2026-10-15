@@ -18,6 +18,7 @@ export function useConfigChangedListener() {
     void listen<ConfigChanged>("config-changed", (event) => {
       const paths = event.payload.paths;
       void qc.invalidateQueries({ queryKey: queryKeys.snapshot });
+      void qc.invalidateQueries({ queryKey: ["dir"] });
       for (const p of paths) {
         void qc.invalidateQueries({ queryKey: queryKeys.file(p) });
         markExternallyChanged(p);

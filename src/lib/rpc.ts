@@ -3,7 +3,11 @@ import type {
   Agent,
   ApplyResult,
   AppSettings,
+  AutomationRunActivity,
+  AutomationRunConversation,
+  AutomationRunPage,
   BackupInfo,
+  CodexSkillInvocation,
   DirEntryInfo,
   FileText,
   FrontmatterChange,
@@ -60,6 +64,18 @@ export type NewEntityKind = "skill" | "subAgent" | "slashCommand";
  */
 export type AceRpc = {
   scan_all: { args: Record<string, never>; result: Snapshot };
+  list_automation_runs: {
+    args: { id: string; cursor?: string | null };
+    result: AutomationRunPage;
+  };
+  get_automation_run: {
+    args: { id: string; threadId: string; before?: number | null; after?: number | null };
+    result: AutomationRunConversation;
+  };
+  get_automation_run_activity: {
+    args: { id: string; threadId: string; itemId: string; cursor?: string | null };
+    result: AutomationRunActivity;
+  };
   get_file_text: { args: { path: string }; result: FileText };
   list_dir: { args: { path: string }; result: DirEntryInfo[] };
   codex_mcp_status: { args: { force?: boolean }; result: Record<string, JsonValue>[] };
@@ -86,6 +102,11 @@ export type AceRpc = {
     result: WritePlan;
   };
   preview_set_skill_enabled: { args: { skillId: string; enabled: boolean }; result: WritePlan };
+  get_codex_skill_invocation: { args: { skillId: string }; result: CodexSkillInvocation };
+  preview_set_codex_skill_invocation: {
+    args: { skillId: string; allowImplicitInvocation: boolean; baseHash: string | null };
+    result: WritePlan;
+  };
   preview_save_frontmatter: {
     args: { path: string; changes: FrontmatterChange[]; body?: string | null; baseHash: string | null };
     result: WritePlan;

@@ -15,11 +15,15 @@
 //! called from [`scan`] because it spawns the Codex binary.
 
 pub mod agents;
+pub mod automation_runs;
 pub mod automations;
 pub mod config_toml;
 pub mod hooks;
 pub mod plugins;
+mod run_activity;
+mod run_history;
 pub mod runtime;
+pub mod skill_policy;
 pub mod skills;
 
 use crate::scan::{ScanCtx, ScanOut};

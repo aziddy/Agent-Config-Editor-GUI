@@ -2,6 +2,8 @@
 
 A desktop app for seeing and editing everything you have configured for **Claude Code** and **OpenAI Codex CLI** on your machine: skills, MCP servers, plugins, subagents, slash commands, hooks and Codex automations. Filter by agent, kind and scope; toggle what can be toggled; edit with forms or a raw editor; reveal any entity in Finder or open it in your editor.
 
+Select a Codex automation and open **Runs** to read its local run history, including archived conversations and expandable tool activity. History refreshes while visible, loads large outputs in chunks, and never changes the automation or marks a run read, accepted, or archived.
+
 Built with Tauri 2 (Rust) + React/TypeScript. macOS first; Linux builds too.
 
 ## Prerequisites
