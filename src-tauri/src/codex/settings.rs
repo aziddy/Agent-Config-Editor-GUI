@@ -14,7 +14,21 @@ pub enum SettingKind {
     Boolean,
     StringList,
     Choice(&'static [&'static str]),
+    Integer { min: i64, max: i64 },
+    Notifications,
+    EnvironmentFilters,
 }
+
+// Keep integers exact when they cross the JavaScript RPC boundary.
+const MAX_SAFE_INTEGER: i64 = 9_007_199_254_740_991;
+const POSITIVE: SettingKind = SettingKind::Integer {
+    min: 1,
+    max: MAX_SAFE_INTEGER,
+};
+const NON_NEGATIVE: SettingKind = SettingKind::Integer {
+    min: 0,
+    max: MAX_SAFE_INTEGER,
+};
 
 pub const FIELDS: &[(&[&str], SettingKind)] = &[
     (&["model"], SettingKind::Text),
@@ -62,6 +76,113 @@ pub const FIELDS: &[(&[&str], SettingKind)] = &[
     (&["tui", "theme"], SettingKind::Text),
     (&["tui", "animations"], SettingKind::Boolean),
     (&["notify"], SettingKind::StringList),
+    (&["review_model"], SettingKind::Text),
+    (&["model_context_window"], POSITIVE),
+    (&["model_auto_compact_token_limit"], POSITIVE),
+    (
+        &["model_auto_compact_token_limit_scope"],
+        SettingKind::Choice(&["total", "body_after_prefix"]),
+    ),
+    (&["tool_output_token_limit"], NON_NEGATIVE),
+    (&["agents", "enabled"], SettingKind::Boolean),
+    (&["agents", "max_concurrent_threads_per_session"], POSITIVE),
+    (&["agents", "max_threads"], POSITIVE),
+    (&["agents", "default_subagent_model"], SettingKind::Text),
+    (
+        &["agents", "default_subagent_reasoning_effort"],
+        SettingKind::Text,
+    ),
+    (&["agents", "interrupt_message"], SettingKind::Boolean),
+    (
+        &["history", "persistence"],
+        SettingKind::Choice(&["save-all", "none"]),
+    ),
+    (&["history", "max_bytes"], NON_NEGATIVE),
+    (&["analytics", "enabled"], SettingKind::Boolean),
+    (&["feedback", "enabled"], SettingKind::Boolean),
+    (&["allow_login_shell"], SettingKind::Boolean),
+    (
+        &["shell_environment_policy", "inherit"],
+        SettingKind::Choice(&["all", "core", "none"]),
+    ),
+    (
+        &["shell_environment_policy", "ignore_default_excludes"],
+        SettingKind::Boolean,
+    ),
+    (
+        &["shell_environment_policy", "filters"],
+        SettingKind::EnvironmentFilters,
+    ),
+    // Read legacy settings so forms can explain conflicts before a save.
+    (
+        &["shell_environment_policy", "exclude"],
+        SettingKind::StringList,
+    ),
+    (
+        &["shell_environment_policy", "include_only"],
+        SettingKind::StringList,
+    ),
+    (&["project_doc_max_bytes"], NON_NEGATIVE),
+    (&["project_doc_fallback_filenames"], SettingKind::StringList),
+    (&["project_root_markers"], SettingKind::StringList),
+    (
+        &["skills", "max_context_tokens"],
+        SettingKind::Integer { min: 1, max: 10000 },
+    ),
+    (
+        &["memories", "disable_on_external_context"],
+        SettingKind::Boolean,
+    ),
+    (
+        &["memories", "max_unused_days"],
+        SettingKind::Integer { min: 0, max: 365 },
+    ),
+    (
+        &["memories", "max_rollout_age_days"],
+        SettingKind::Integer { min: 0, max: 90 },
+    ),
+    (
+        &["memories", "max_raw_memories_for_consolidation"],
+        SettingKind::Integer { min: 0, max: 4096 },
+    ),
+    (
+        &["memories", "max_rollouts_per_startup"],
+        SettingKind::Integer { min: 0, max: 128 },
+    ),
+    (
+        &["memories", "min_rollout_idle_hours"],
+        SettingKind::Integer { min: 1, max: 48 },
+    ),
+    (
+        &["memories", "min_rate_limit_remaining_percent"],
+        SettingKind::Integer { min: 0, max: 100 },
+    ),
+    (&["memories", "extract_model"], SettingKind::Text),
+    (&["memories", "consolidation_model"], SettingKind::Text),
+    (&["tui", "notifications"], SettingKind::Notifications),
+    (
+        &["tui", "notification_method"],
+        SettingKind::Choice(&["auto", "osc9", "bel"]),
+    ),
+    (
+        &["tui", "notification_condition"],
+        SettingKind::Choice(&["unfocused", "always"]),
+    ),
+    (&["tui", "vim_mode_default"], SettingKind::Boolean),
+    (
+        &["tui", "resume_cwd"],
+        SettingKind::Choice(&["current", "session"]),
+    ),
+    (
+        &["tui", "alternate_screen"],
+        SettingKind::Choice(&["auto", "always", "never"]),
+    ),
+    (&["tui", "auto_recap"], SettingKind::Boolean),
+    (&["tui", "show_tooltips"], SettingKind::Boolean),
+    (
+        &["file_opener"],
+        SettingKind::Choice(&["vscode", "vscode-insiders", "windsurf", "cursor", "none"]),
+    ),
 ];
 
 impl SettingKind {
@@ -73,6 +194,16 @@ impl SettingKind {
             Self::StringList => value
                 .as_array()
                 .is_some_and(|v| v.iter().all(Value::is_string)),
+            Self::Integer { .. } => value
+                .as_i64()
+                .is_some_and(|v| (-MAX_SAFE_INTEGER..=MAX_SAFE_INTEGER).contains(&v)),
+            Self::Notifications => value.is_boolean() || Self::StringList.matches_shape(value),
+            Self::EnvironmentFilters => value.as_object().is_some_and(|map| {
+                map.iter().all(|(pattern, policy)| {
+                    !pattern.trim().is_empty()
+                        && matches!(policy.as_str(), Some("include" | "exclude"))
+                })
+            }),
         }
     }
 
@@ -83,6 +214,33 @@ impl SettingKind {
         if let Self::Choice(choices) = self {
             if !choices.contains(&value.as_str().unwrap_or_default()) {
                 return Err(AppError::invalid("setting value is not a supported option"));
+            }
+        }
+        if let Self::Integer { min, max } = self {
+            if !value.as_i64().is_some_and(|v| (min..=max).contains(&v)) {
+                return Err(AppError::invalid(format!(
+                    "setting must be a whole number from {min} to {max}"
+                )));
+            }
+        }
+        if matches!(self, Self::StringList | Self::Notifications)
+            && value.as_array().is_some_and(|rows| {
+                rows.iter()
+                    .any(|v| v.as_str().is_none_or(|s| s.trim().is_empty()))
+            })
+        {
+            return Err(AppError::invalid("setting list cannot contain empty rows"));
+        }
+        if let Self::EnvironmentFilters = self {
+            let map = value.as_object().expect("validated object shape");
+            let mut patterns = std::collections::HashSet::new();
+            if map
+                .keys()
+                .any(|key| !patterns.insert(key.to_ascii_lowercase()))
+            {
+                return Err(AppError::invalid(
+                    "environment filter patterns must be unique (case-insensitive)",
+                ));
             }
         }
         Ok(())
@@ -131,12 +289,24 @@ pub fn simple_value(item: &Item) -> Option<Value> {
         Some(Value::String(value.into()))
     } else if let Some(value) = item.as_bool() {
         Some(Value::Bool(value))
+    } else if let Some(value) = item.as_integer() {
+        Some(Value::from(value))
     } else if let Some(array) = item.as_array() {
         array
             .iter()
             .map(|value| value.as_str().map(|s| Value::String(s.into())))
             .collect::<Option<Vec<_>>>()
             .map(Value::Array)
+    } else if let Some(table) = item.as_table_like() {
+        table
+            .iter()
+            .map(|(key, value)| {
+                value
+                    .as_str()
+                    .map(|v| (key.into(), Value::String(v.into())))
+            })
+            .collect::<Option<Map<_, _>>>()
+            .map(Value::Object)
     } else {
         None
     }

@@ -48,7 +48,7 @@ The bundle is ad-hoc signed: right-click → Open on first launch.
 
 ## How edits work
 
-**Codex Settings** is a separate cards/forms view of the same user config, covering model and reasoning, permissions and web search, instructions, feature flags, memories, and terminal preferences. Save reviews all form changes in one diff. Resetting a field removes its explicit override; advanced and custom TOML values remain available in **Codex Config**.
+**Codex Settings** is a separate cards/forms view of the same user config, covering model and reasoning, agents, context and compaction, permissions and web search, instructions, project discovery, history and privacy, shell environment filters, memories, and terminal preferences. Its documented feature catalog includes options that are not yet in your file, with default and maturity guidance. Every field starts with **Use Codex default** when unset; loading the page never adds defaults. Save reviews all form changes in one diff. Numeric limits, filter patterns, and list rows are validated before saving. Resetting a field removes its explicit override; advanced and custom TOML values remain available in **Codex Config**. Options follow the [official Codex configuration reference](https://learn.chatgpt.com/docs/config-file/config-reference); availability can depend on your installed Codex version, client, model, and account.
 
 Open **Codex Config** in the sidebar to view and edit the full `~/.codex/config.toml` with TOML syntax highlighting, diff previews, and backup history. The page uses the resolved Codex home, including `CODEX_HOME` and sandbox mode, independently of the agent and location filters.
 

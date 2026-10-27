@@ -214,7 +214,7 @@ pub fn plan_save_codex_settings(
     changes: &[CodexSettingChange],
     base_hash: &str,
 ) -> AppResult<WritePlan> {
-    use crate::codex::settings::{item_at, read_document, setting_kind, simple_value};
+    use crate::codex::settings::{item_at, read_document, setting_kind, simple_value, SettingKind};
 
     let path = homes.codex_home.join("config.toml");
     homes.check_writable(&path)?;
@@ -224,6 +224,8 @@ pub fn plan_save_codex_settings(
     }
     let mut changed = false;
     let mut permissions_changed = false;
+    let mut filters_changed = false;
+    let mut agent_limit_changed = false;
     for change in changes {
         let kind = setting_kind(&change.path)
             .ok_or_else(|| AppError::invalid("setting is not editable in Codex Settings"))?;
@@ -239,15 +241,51 @@ pub fn plan_save_codex_settings(
         }
         if let Some(value) = &change.value {
             kind.validate(value)?;
-            writeplan::toml_set(&mut doc, &change.path, value)?;
+            if matches!(kind, SettingKind::EnvironmentFilters) {
+                // Replace just the map's entries, preserving unchanged key quoting,
+                // comments and table style. toml_set alone merges without deleting.
+                let mut patch = value.as_object().expect("validated filters").clone();
+                if let Some(current) = current.as_ref().and_then(Value::as_object) {
+                    for key in current.keys() {
+                        patch.entry(key).or_insert(Value::Null);
+                    }
+                    patch.retain(|key, value| current.get(key) != Some(value));
+                }
+                writeplan::toml_set(&mut doc, &change.path, &Value::Object(patch))?;
+            } else {
+                writeplan::toml_set(&mut doc, &change.path, value)?;
+            }
         } else {
             writeplan::toml_delete(&mut doc, &change.path);
         }
         changed = true;
+        filters_changed |= matches!(kind, SettingKind::EnvironmentFilters);
+        agent_limit_changed |= change.path == ["agents", "max_concurrent_threads_per_session"];
         permissions_changed |= matches!(
             change.path.first().map(String::as_str),
             Some("default_permissions" | "sandbox_mode" | "sandbox_workspace_write")
         );
+    }
+    if filters_changed {
+        if let Some(shell) = doc
+            .get("shell_environment_policy")
+            .and_then(toml_edit::Item::as_table_like)
+        {
+            if shell.contains_key("filters")
+                && (shell.contains_key("exclude") || shell.contains_key("include_only"))
+            {
+                return Err(AppError::invalid("environment filters cannot be combined with legacy exclude/include_only arrays; edit this combination in Codex Config"));
+            }
+        }
+    }
+    if agent_limit_changed {
+        if let Some(agents) = doc.get("agents").and_then(toml_edit::Item::as_table_like) {
+            if agents.contains_key("max_concurrent_threads_per_session")
+                && agents.contains_key("max_threads")
+            {
+                return Err(AppError::invalid("remove the legacy agents.max_threads setting in Codex Config before setting the concurrency limit"));
+            }
+        }
     }
     if permissions_changed
         && doc.contains_key("default_permissions")

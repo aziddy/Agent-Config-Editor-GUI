@@ -8,14 +8,16 @@ interface Props {
   placeholder?: string;
   readOnly?: boolean;
   mono?: boolean;
+  ariaLabel?: string;
 }
 
-export function ListEditor({ items, onChange, placeholder, readOnly, mono = true }: Props) {
+export function ListEditor({ items, onChange, placeholder, readOnly, mono = true, ariaLabel }: Props) {
   return (
     <div className="space-y-1">
       {items.map((item, i) => (
-        <div key={`${i}-${item}`} className="flex items-center gap-1">
+        <div key={i} className="flex items-center gap-1">
           <Input
+            aria-label={ariaLabel ? `${ariaLabel} ${i + 1}` : undefined}
             value={item}
             readOnly={readOnly}
             placeholder={placeholder}

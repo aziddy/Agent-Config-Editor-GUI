@@ -141,6 +141,335 @@ fn noop_save_is_byte_identical_even_with_explicit_unchanged_values() {
 }
 
 #[test]
+fn expanded_settings_round_trip_without_defaults_or_unrelated_changes() {
+    let (_temp, homes) = setup(ORIGINAL);
+    let plan = preview(
+        &homes,
+        &[
+            change(&["model_auto_compact_token_limit"], json!(120000)),
+            change(
+                &["model_auto_compact_token_limit_scope"],
+                json!("body_after_prefix"),
+            ),
+            change(&["agents", "max_concurrent_threads_per_session"], json!(6)),
+            change(
+                &["agents", "default_subagent_model"],
+                json!("custom-agent-model"),
+            ),
+            change(&["history", "persistence"], json!("none")),
+            change(&["history", "max_bytes"], json!(0)),
+            change(&["analytics", "enabled"], json!(false)),
+            change(&["feedback", "enabled"], json!(false)),
+            change(&["project_doc_fallback_filenames"], json!(["TEAM.md"])),
+            change(&["skills", "max_context_tokens"], json!(10000)),
+            change(&["memories", "max_unused_days"], json!(0)),
+            change(&["memories", "extract_model"], json!("custom-memory-model")),
+            change(&["features", "goals"], json!(false)),
+            change(&["tui", "notification_condition"], json!("always")),
+        ],
+    );
+    let text = plan.new_text.as_ref().unwrap();
+    assert!(text.contains("max_concurrent_threads_per_session = 6"));
+    assert!(!text.contains("model_context_window"));
+    assert!(!text.contains("fast_mode"));
+    assert!(text.contains("model = 'custom-model' # retain inline comment"));
+    assert!(text.contains("experimental_bearer_token = 'fictional-private-value'"));
+    apply_plan(&homes, &plan);
+    let data = settings::read(&homes).unwrap();
+    assert!(data.unsupported_paths.is_empty());
+    assert_eq!(
+        data.values["agents"]["max_concurrent_threads_per_session"],
+        6
+    );
+    assert_eq!(data.values["history"]["max_bytes"], 0);
+    assert_eq!(data.values["analytics"]["enabled"], false);
+    assert_eq!(data.values["memories"]["max_unused_days"], 0);
+    assert_eq!(data.values["skills"]["max_context_tokens"], 10000);
+    let noop = preview(
+        &homes,
+        &[
+            change(&["agents", "max_concurrent_threads_per_session"], json!(6)),
+            change(&["history", "max_bytes"], json!(0)),
+            change(&["features", "goals"], json!(false)),
+        ],
+    );
+    assert!(noop.unified_diff.is_empty());
+    assert_eq!(noop.new_text, plan.new_text);
+    let remove = preview(
+        &homes,
+        &[change(
+            &["agents", "max_concurrent_threads_per_session"],
+            Value::Null,
+        )],
+    );
+    apply_plan(&homes, &remove);
+    assert!(settings::read(&homes).unwrap().values["agents"]
+        .get("max_concurrent_threads_per_session")
+        .is_none());
+}
+
+#[test]
+fn invalid_numeric_limits_and_empty_lists_are_rejected_without_writes() {
+    let (_temp, homes) = setup(ORIGINAL);
+    for edit in [
+        change(&["model_context_window"], json!(1.5)),
+        change(&["model_context_window"], json!("1000")),
+        change(&["model_context_window"], json!(9_007_199_254_740_992_i64)),
+        change(&["agents", "max_concurrent_threads_per_session"], json!(0)),
+        change(&["history", "max_bytes"], json!(-1)),
+        change(&["memories", "max_unused_days"], json!(366)),
+        change(&["memories", "min_rollout_idle_hours"], json!(0)),
+        change(
+            &["memories", "min_rate_limit_remaining_percent"],
+            json!(101),
+        ),
+        change(&["skills", "max_context_tokens"], json!(10001)),
+        change(&["project_doc_fallback_filenames"], json!([""])),
+        change(&["tui", "notifications"], json!([" "])),
+    ] {
+        let data = settings::read(&homes).unwrap();
+        assert_eq!(
+            plan_save_codex_settings(&homes, &[edit], &data.hash)
+                .unwrap_err()
+                .code,
+            ErrorCode::InvalidInput
+        );
+    }
+    assert_eq!(
+        fs::read_to_string(homes.codex_home.join("config.toml")).unwrap(),
+        ORIGINAL
+    );
+}
+
+#[test]
+fn notification_shapes_and_array_comments_survive_edits() {
+    let original = "model = 'keep'\n[tui]\nnotifications = ['agent-turn-complete'] # keep event comment\nstatus_line = [\n  'model', # keep element comment\n  'context-used'\n] # keep footer comment\n";
+    let (_temp, homes) = setup(original);
+    let plan = preview(
+        &homes,
+        &[
+            change(&["tui", "notifications"], json!(["approval-requested"])),
+            change(
+                &["tui", "status_line"],
+                json!(["model", "context-remaining"]),
+            ),
+        ],
+    );
+    assert!(plan
+        .new_text
+        .as_ref()
+        .unwrap()
+        .contains("# keep event comment"));
+    assert!(plan
+        .new_text
+        .as_ref()
+        .unwrap()
+        .contains("# keep footer comment"));
+    assert!(plan
+        .new_text
+        .as_ref()
+        .unwrap()
+        .contains("'model', # keep element comment"));
+    apply_plan(&homes, &plan);
+    let plan = preview(&homes, &[change(&["tui", "notifications"], json!(false))]);
+    assert!(plan
+        .new_text
+        .as_ref()
+        .unwrap()
+        .contains("notifications = false # keep event comment"));
+    apply_plan(&homes, &plan);
+    assert_eq!(
+        settings::read(&homes).unwrap().values["tui"]["notifications"],
+        false
+    );
+}
+
+#[test]
+fn environment_filter_edits_preserve_unchanged_quoting_comments_and_unrelated_values() {
+    let original = "[shell_environment_policy]\ninherit = 'all'\n[shell_environment_policy.filters]\n'PATH' = 'include' # leave this byte-identical\n\"SECRET.*\" = 'exclude' # update this\nOLD = 'include'\n[shell_environment_policy.set]\nPRIVATE_TOKEN = 'fictional-private-value'\n";
+    let (_temp, homes) = setup(original);
+    let data = settings::read(&homes).unwrap();
+    assert_eq!(
+        data.values["shell_environment_policy"]["filters"]["SECRET.*"],
+        "exclude"
+    );
+    assert!(!serde_json::to_string(&data)
+        .unwrap()
+        .contains("fictional-private-value"));
+    let plan = preview(
+        &homes,
+        &[change(
+            &["shell_environment_policy", "filters"],
+            json!({"PATH":"include", "SECRET.*":"include", "__proto__":"exclude"}),
+        )],
+    );
+    let text = plan.new_text.as_ref().unwrap();
+    assert!(text.contains("'PATH' = 'include' # leave this byte-identical"));
+    assert!(text.contains("\"SECRET.*\" = \"include\" # update this"));
+    assert!(!text.contains("OLD ="));
+    assert!(text
+        .ends_with("[shell_environment_policy.set]\nPRIVATE_TOKEN = 'fictional-private-value'\n"));
+    apply_plan(&homes, &plan);
+    let data = settings::read(&homes).unwrap();
+    assert_eq!(
+        data.values["shell_environment_policy"]["filters"]["__proto__"],
+        "exclude"
+    );
+    let noop = preview(
+        &homes,
+        &[change(
+            &["shell_environment_policy", "filters"],
+            json!({"__proto__":"exclude", "SECRET.*":"include", "PATH":"include"}),
+        )],
+    );
+    assert!(noop.unified_diff.is_empty());
+    assert_eq!(noop.new_text, plan.new_text);
+    let reset = preview(
+        &homes,
+        &[change(
+            &["shell_environment_policy", "filters"],
+            Value::Null,
+        )],
+    );
+    apply_plan(&homes, &reset);
+    assert!(
+        settings::read(&homes).unwrap().values["shell_environment_policy"]
+            .get("filters")
+            .is_none()
+    );
+}
+
+#[test]
+fn empty_and_inline_filter_maps_are_editable_and_removable() {
+    for original in [
+        "[shell_environment_policy.filters]\n",
+        "shell_environment_policy = { filters = { PATH = 'include' }, inherit = 'core' }\n",
+    ] {
+        let (_temp, homes) = setup(original);
+        let data = settings::read(&homes).unwrap();
+        let noop = preview(
+            &homes,
+            &[change(
+                &["shell_environment_policy", "filters"],
+                data.values["shell_environment_policy"]["filters"].clone(),
+            )],
+        );
+        assert_eq!(noop.new_text.as_deref(), Some(original));
+        let plan = preview(
+            &homes,
+            &[change(
+                &["shell_environment_policy", "filters"],
+                json!({"NODE_*":"exclude"}),
+            )],
+        );
+        apply_plan(&homes, &plan);
+        assert_eq!(
+            settings::read(&homes).unwrap().values["shell_environment_policy"]["filters"],
+            json!({"NODE_*":"exclude"})
+        );
+        let empty = preview(
+            &homes,
+            &[change(&["shell_environment_policy", "filters"], json!({}))],
+        );
+        apply_plan(&homes, &empty);
+        assert_eq!(
+            settings::read(&homes).unwrap().values["shell_environment_policy"]["filters"],
+            json!({})
+        );
+        let reset = preview(
+            &homes,
+            &[change(
+                &["shell_environment_policy", "filters"],
+                Value::Null,
+            )],
+        );
+        apply_plan(&homes, &reset);
+        assert!(!fs::read_to_string(homes.codex_home.join("config.toml"))
+            .unwrap()
+            .contains("filters"));
+    }
+}
+
+#[test]
+fn invalid_filter_maps_and_legacy_conflicts_cannot_produce_invalid_config() {
+    let (_temp, homes) = setup(ORIGINAL);
+    for value in [
+        json!({"":"include"}),
+        json!({"PATH":"invalid"}),
+        json!({"PATH":"include", "path":"exclude"}),
+        json!({"PATH":true}),
+        json!(["PATH"]),
+    ] {
+        let data = settings::read(&homes).unwrap();
+        assert_eq!(
+            plan_save_codex_settings(
+                &homes,
+                &[change(&["shell_environment_policy", "filters"], value)],
+                &data.hash
+            )
+            .unwrap_err()
+            .code,
+            ErrorCode::InvalidInput
+        );
+    }
+    for legacy in ["exclude", "include_only"] {
+        let original =
+            format!("model = 'keep'\n[shell_environment_policy]\n{legacy} = ['KEY_*']\n");
+        let (_temp, homes) = setup(&original);
+        let data = settings::read(&homes).unwrap();
+        assert!(plan_save_codex_settings(
+            &homes,
+            &[change(
+                &["shell_environment_policy", "filters"],
+                json!({"PATH":"include"})
+            )],
+            &data.hash
+        )
+        .is_err());
+        assert!(preview(&homes, &[change(&["model"], json!("unrelated"))])
+            .new_text
+            .unwrap()
+            .contains(&format!("{legacy} = ['KEY_*']")));
+        assert_eq!(
+            fs::read_to_string(homes.codex_home.join("config.toml")).unwrap(),
+            original
+        );
+    }
+    let (_temp, homes) = setup("[agents]\nmax_threads = 3\n");
+    let data = settings::read(&homes).unwrap();
+    assert!(plan_save_codex_settings(
+        &homes,
+        &[change(
+            &["agents", "max_concurrent_threads_per_session"],
+            json!(4)
+        )],
+        &data.hash
+    )
+    .is_err());
+}
+
+#[test]
+fn unsupported_parents_and_unsafe_integers_remain_readonly() {
+    let (_temp, homes) = setup("model = 'keep'\nmodel_context_window = 9007199254740992\nagents = true\n[features.network_proxy]\nenabled = true\n[history]\nmax_bytes = 1.5\n");
+    let data = settings::read(&homes).unwrap();
+    for path in [
+        vec!["model_context_window"],
+        vec!["agents", "enabled"],
+        vec!["features", "network_proxy"],
+        vec!["history", "max_bytes"],
+    ] {
+        assert!(data
+            .unsupported_paths
+            .contains(&path.iter().map(|s| (*s).into()).collect()));
+    }
+    assert!(!data.values.contains_key("model_context_window"));
+    assert!(preview(&homes, &[change(&["model"], json!("changed"))])
+        .new_text
+        .unwrap()
+        .contains("max_bytes = 1.5"));
+}
+
+#[test]
 fn stale_files_are_rejected_before_preview_and_apply() {
     let (_temp, homes) = setup(ORIGINAL);
     let path = homes.codex_home.join("config.toml");

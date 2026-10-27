@@ -471,8 +471,29 @@ pub fn toml_set(doc: &mut DocumentMut, path: &[String], value: &Value) -> AppRes
         .as_table_like_mut()
         .ok_or_else(|| AppError::invalid(format!("{} is not a table", parents.join("."))))?;
     match (table.get_mut(last), value) {
-        (Some(existing), v) if existing.is_value() && !v.is_object() && !v.is_array() => {
-            // Replace the scalar but keep the existing decor (comments / spacing).
+        (Some(existing), Value::Array(values))
+            if existing
+                .as_array()
+                .is_some_and(|array| array.iter().all(|v| v.is_str()))
+                && values.iter().all(Value::is_string) =>
+        {
+            // Form lists should keep element comments, multiline formatting and
+            // unchanged literal strings, as well as the array's outer comment.
+            let array = existing.as_array_mut().expect("checked array shape");
+            for (index, value) in values.iter().enumerate() {
+                let text = value.as_str().expect("checked string shape");
+                if index >= array.len() {
+                    array.push(text);
+                } else if array.get(index).and_then(toml_edit::Value::as_str) != Some(text) {
+                    array.replace(index, text);
+                }
+            }
+            while array.len() > values.len() {
+                array.remove(array.len() - 1);
+            }
+        }
+        (Some(existing), v) if existing.is_value() && !v.is_object() => {
+            // Replace a scalar or array but keep its comments and spacing.
             let new_val = json_to_toml_value(v)?;
             if let Some(old) = existing.as_value_mut() {
                 let decor = old.decor().clone();

@@ -2,6 +2,9 @@ import {
   Brain,
   Cpu,
   FileCode2,
+  FolderCog,
+  Gauge,
+  History,
   type LucideIcon,
   MessageSquareText,
   RotateCcw,
@@ -9,6 +12,7 @@ import {
   ShieldCheck,
   Sparkles,
   Terminal,
+  Users,
 } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { PathActions } from "@/components/PathActions";
@@ -17,16 +21,21 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CodexSettingField } from "@/forms/CodexSettingField";
 import {
+  AGENT_FIELDS,
   APPROVAL_FIELDS,
+  CONTEXT_FIELDS,
   codexSettingChanges,
   type CodexSettingField as Field,
+  featureFields,
+  HISTORY_FIELDS,
   INSTRUCTIONS_FIELD,
-  isJsonMap,
   MEMORY_FIELDS,
   MODEL_FIELDS,
+  PROJECT_FIELDS,
   SANDBOX_FIELDS,
+  SHELL_FIELDS,
   setSetting,
-  settingsListsValid,
+  settingsValid,
   settingValue,
   TERMINAL_FIELDS,
   WEB_FIELD,
@@ -111,10 +120,10 @@ function SettingsEditor({ path, readOnly }: { path: string; readOnly: boolean })
   }, [file.data, baseHash]);
 
   const changes = useMemo(() => (base ? codexSettingChanges(base.values, draft) : []), [base, draft]);
-  const dirty = changes.length > 0;
+  const valid = settingsValid(base?.values ?? {}, draft);
+  const dirty = changes.length > 0 || !valid;
   const diskChanged = !!base && !!file.data && base.hash !== file.data.hash;
   const conflict = dirty && diskChanged;
-  const valid = settingsListsValid(base?.values ?? {}, draft);
   const discard = useCallback(() => {
     setSession((current) => {
       const loaded = file.error ? current.base : (file.data ?? current.base);
@@ -180,14 +189,30 @@ function SettingsEditor({ path, readOnly }: { path: string; readOnly: boolean })
         onChange={change}
       />
     ));
-  const featureValues = settingValue(base?.values ?? {}, ["features"]);
-  const draftFeatures = settingValue(draft, ["features"]);
-  const featureNames = [
-    ...new Set([
-      ...Object.keys(isJsonMap(featureValues) ? featureValues : {}),
-      ...Object.keys(isJsonMap(draftFeatures) ? draftFeatures : {}),
-    ]),
-  ];
+  const legacyAgentLimit = settingValue(base?.values ?? {}, ["agents", "max_threads"]);
+  const agentFields = AGENT_FIELDS.map((field) =>
+    field.path[1] === "max_concurrent_threads_per_session" && legacyAgentLimit !== undefined
+      ? {
+          ...field,
+          readOnly: true,
+          help: `Legacy agents.max_threads is set to ${legacyAgentLimit}. Edit or remove it in Codex Config first.`,
+        }
+      : field,
+  );
+  const legacyFilters = ["exclude", "include_only"].some(
+    (key) =>
+      settingValue(base?.values ?? {}, ["shell_environment_policy", key]) !== undefined ||
+      base?.unsupportedPaths.some((path) => path[0] === "shell_environment_policy" && path[1] === key),
+  );
+  const shellFields = SHELL_FIELDS.map((field) =>
+    field.kind === "filters" && legacyFilters
+      ? {
+          ...field,
+          readOnly: true,
+          help: "Legacy exclude/include_only arrays are configured. Edit or remove them in Codex Config before adding filters.",
+        }
+      : field,
+  );
   const providers = [
     ...new Set(["openai", "ollama", "lmstudio", "amazon-bedrock", ...(base?.providerNames ?? [])]),
   ];
@@ -241,7 +266,7 @@ function SettingsEditor({ path, readOnly }: { path: string; readOnly: boolean })
         <div className="flex items-center gap-2">
           <div className="min-w-0 flex-1">
             <p className="mb-1 text-xs text-muted-foreground">
-              Edit explicit overrides in your Codex user config.
+              Edit explicit overrides in your Codex user config. Use Codex default leaves a setting unset.
             </p>
             <p className="truncate font-mono text-xs text-muted-foreground" title={path}>
               {path}
@@ -308,6 +333,20 @@ function SettingsEditor({ path, readOnly }: { path: string; readOnly: boolean })
                 {fields(modelFields)}
               </SettingsCard>
               <SettingsCard
+                title="Agents"
+                description="Set defaults for spawned agents and limit concurrent threads."
+                icon={Users}
+              >
+                {fields(agentFields)}
+              </SettingsCard>
+              <SettingsCard
+                title="Context & compaction"
+                description="Control context budgets, history compaction, and review models."
+                icon={Gauge}
+              >
+                {fields(CONTEXT_FIELDS)}
+              </SettingsCard>
+              <SettingsCard
                 title="Permissions & web"
                 description="Control approvals, sandbox access, and web search."
                 icon={ShieldCheck}
@@ -332,19 +371,40 @@ function SettingsEditor({ path, readOnly }: { path: string; readOnly: boolean })
                 {fields([INSTRUCTIONS_FIELD])}
               </SettingsCard>
               <SettingsCard
-                title="Features"
-                description="Explicit feature flags configured in this file."
-                icon={Sparkles}
+                title="Project instructions"
+                description="Configure instruction discovery and the skills catalog budget."
+                icon={FolderCog}
               >
-                {featureNames.length ? (
-                  fields(
-                    featureNames.map((name) => ({ path: ["features", name], label: name, kind: "boolean" })),
-                  )
-                ) : (
-                  <p className="text-xs text-muted-foreground">
-                    No explicit boolean flags. Use Open TOML to add feature settings.
-                  </p>
-                )}
+                {fields(PROJECT_FIELDS)}
+              </SettingsCard>
+              <SettingsCard
+                title="History & privacy"
+                description="Configure command history, analytics, and feedback submission."
+                icon={History}
+              >
+                {fields(HISTORY_FIELDS)}
+              </SettingsCard>
+              <SettingsCard
+                title="Shell environment"
+                description="Choose how spawned commands inherit and filter environment variables."
+                icon={Terminal}
+                wide
+              >
+                {fields(shellFields)}
+              </SettingsCard>
+              <SettingsCard
+                title="Features"
+                description="Documented user-facing flags, including unset options. Defaults and availability can vary by client, model, and account."
+                icon={Sparkles}
+                wide
+              >
+                <div className="grid grid-cols-1 items-start gap-x-6 gap-y-4 lg:grid-cols-2">
+                  {fields(featureFields(base.values, draft, base.unsupportedPaths))}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Ignored, deprecated, and under-development switches are not suggested as new overrides.
+                  Advanced feature tables remain available in Codex Config.
+                </p>
               </SettingsCard>
               <SettingsCard title="Memories" description="Control memory generation and use." icon={Brain}>
                 {fields(MEMORY_FIELDS)}

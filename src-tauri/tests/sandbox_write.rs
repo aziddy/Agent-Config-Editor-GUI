@@ -4,7 +4,7 @@
 
 use agent_config_editor_lib::actions::{self, McpTarget};
 use agent_config_editor_lib::fsutil::{self, BackupStore, Homes};
-use agent_config_editor_lib::model::{Agent, AppSettings, Scope};
+use agent_config_editor_lib::model::{Agent, AppSettings, CodexSettingChange, Scope};
 use agent_config_editor_lib::{scan, writeplan};
 use std::fs;
 
@@ -25,7 +25,32 @@ fn codex_settings_noop_save_is_byte_identical() {
     let config = homes.codex_home.join("config.toml");
     let original = fs::read(&config).unwrap();
     let data = agent_config_editor_lib::codex::settings::read(&homes).unwrap();
-    let plan = actions::plan_save_codex_settings(&homes, &[], &data.hash).unwrap();
+    // Submit every projected value unchanged, exercising all form value types.
+    let projected = serde_json::Value::Object(data.values.clone());
+    let mut changes: Vec<_> = agent_config_editor_lib::codex::settings::FIELDS
+        .iter()
+        .filter_map(|(path, _)| {
+            let mut value = &projected;
+            for key in *path {
+                value = value.get(*key)?;
+            }
+            Some(CodexSettingChange {
+                path: path.iter().map(|key| (*key).into()).collect(),
+                value: Some(value.clone()),
+            })
+        })
+        .collect();
+    if let Some(features) = data
+        .values
+        .get("features")
+        .and_then(serde_json::Value::as_object)
+    {
+        changes.extend(features.iter().map(|(name, value)| CodexSettingChange {
+            path: vec!["features".into(), name.clone()],
+            value: Some(value.clone()),
+        }));
+    }
+    let plan = actions::plan_save_codex_settings(&homes, &changes, &data.hash).unwrap();
     let tmp = tempfile::tempdir().unwrap();
     let backups = BackupStore::new(tmp.path().to_path_buf(), 5);
     apply(&homes, &backups, &plan);
