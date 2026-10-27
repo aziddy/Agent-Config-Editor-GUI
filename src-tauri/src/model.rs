@@ -559,6 +559,27 @@ pub struct FileText {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct CodexSettings {
+    pub path: String,
+    pub hash: String,
+    pub mode: u32,
+    pub values: Map<String, Value>,
+    pub provider_names: Vec<String>,
+    pub permission_profiles: Vec<String>,
+    pub named_permissions: bool,
+    pub unsupported_paths: Vec<Vec<String>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CodexSettingChange {
+    pub path: Vec<String>,
+    /// Null means remove this explicit override.
+    pub value: Option<Value>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct FrontmatterChange {
     pub key: String,
     /// `None` deletes the key.

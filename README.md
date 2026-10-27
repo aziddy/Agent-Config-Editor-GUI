@@ -48,6 +48,8 @@ The bundle is ad-hoc signed: right-click → Open on first launch.
 
 ## How edits work
 
+**Codex Settings** is a separate cards/forms view of the same user config, covering model and reasoning, permissions and web search, instructions, feature flags, memories, and terminal preferences. Save reviews all form changes in one diff. Resetting a field removes its explicit override; advanced and custom TOML values remain available in **Codex Config**.
+
 Open **Codex Config** in the sidebar to view and edit the full `~/.codex/config.toml` with TOML syntax highlighting, diff previews, and backup history. The page uses the resolved Codex home, including `CODEX_HOME` and sandbox mode, independently of the agent and location filters.
 
 Every change is previewed as a unified diff before it is written. Applying re-reads the file, refuses if it changed underneath you (structured edits rebase onto the fresh content when the touched key is unchanged), keeps a timestamped backup under the app data dir, writes atomically and preserves the file mode (Codex's `config.toml` stays `0600`). TOML edits are lossless: comments, blank lines, table order and quoting survive. Backups can be listed and restored from the Editor tab. Editing a symlink updates its target and preserves the link; changing the target after preview blocks the save.

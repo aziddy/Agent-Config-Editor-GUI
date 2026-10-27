@@ -6,6 +6,7 @@ import { describeError } from "@/lib/errors";
 import { useConfigChangedListener } from "@/lib/events";
 import { useAppSettings, useSnapshot } from "@/lib/queries";
 import { CodexConfigScreen } from "@/screens/CodexConfigScreen";
+import { CodexSettingsScreen } from "@/screens/CodexSettingsScreen";
 import { EntityScreen } from "@/screens/EntityScreen";
 import { ProjectsScreen } from "@/screens/ProjectsScreen";
 import { SettingsScreen } from "@/screens/SettingsScreen";
@@ -42,6 +43,8 @@ export function App() {
           <ProjectsScreen />
         ) : nav === "codexConfig" ? (
           <CodexConfigScreen />
+        ) : nav === "codexSettings" ? (
+          <CodexSettingsScreen />
         ) : nav === "settings" ? (
           <SettingsScreen />
         ) : (

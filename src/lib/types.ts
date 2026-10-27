@@ -340,6 +340,22 @@ export interface FileText {
   language: Language;
 }
 
+export interface CodexSettings {
+  path: string;
+  hash: string;
+  mode: number;
+  values: JsonMap;
+  providerNames: string[];
+  permissionProfiles: string[];
+  namedPermissions: boolean;
+  unsupportedPaths: string[][];
+}
+
+export interface CodexSettingChange {
+  path: string[];
+  value: JsonValue;
+}
+
 export interface FrontmatterChange {
   key: string;
   value: JsonValue | null;

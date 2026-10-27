@@ -7,8 +7,8 @@ use crate::error::{AppError, AppResult};
 use crate::fsutil::{self, display, read_text_with_meta};
 use crate::model::{
     Agent, AppSettings, ApplyResult, AutomationRunActivity, AutomationRunConversation,
-    AutomationRunPage, BackupInfo, CodexMcpRuntime, CodexSkillInvocation, DirEntryInfo, FileText,
-    FrontmatterChange, Scope, Snapshot, WritePlan,
+    AutomationRunPage, BackupInfo, CodexMcpRuntime, CodexSettingChange, CodexSettings,
+    CodexSkillInvocation, DirEntryInfo, FileText, FrontmatterChange, Scope, Snapshot, WritePlan,
 };
 use crate::writeplan::{self, ApplyCtx};
 use crate::{codex, scan, settings, AppState};
@@ -93,6 +93,20 @@ pub async fn scan_all(state: State<'_, AppState>) -> AppResult<Snapshot> {
 // ---------------------------------------------------------------------------
 // Previews (return a WritePlan; nothing is written)
 // ---------------------------------------------------------------------------
+
+#[tauri::command]
+pub fn get_codex_settings(state: State<'_, AppState>) -> AppResult<CodexSettings> {
+    codex::settings::read(&state.homes)
+}
+
+#[tauri::command]
+pub fn preview_save_codex_settings(
+    state: State<'_, AppState>,
+    changes: Vec<CodexSettingChange>,
+    base_hash: String,
+) -> AppResult<WritePlan> {
+    actions::plan_save_codex_settings(&state.homes, &changes, &base_hash)
+}
 
 #[tauri::command]
 pub fn preview_save_file_text(

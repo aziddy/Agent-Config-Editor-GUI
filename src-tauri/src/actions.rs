@@ -4,7 +4,8 @@ use crate::error::{AppError, AppResult};
 use crate::fsutil::{display, read_text_opt, Homes};
 use crate::markdown::frontmatter;
 use crate::model::{
-    Agent, CodexSkillInvocation, ExtraFile, FrontmatterChange, Mutation, Scope, WritePlan,
+    Agent, CodexSettingChange, CodexSkillInvocation, ExtraFile, FrontmatterChange, Mutation, Scope,
+    WritePlan,
 };
 use crate::writeplan::{self, build, json_array_add, json_array_remove, pointer, PlanInput};
 use serde::Deserialize;
@@ -207,6 +208,60 @@ pub fn slugify(name: &str) -> String {
 // ---------------------------------------------------------------------------
 // Raw text
 // ---------------------------------------------------------------------------
+
+pub fn plan_save_codex_settings(
+    homes: &Homes,
+    changes: &[CodexSettingChange],
+    base_hash: &str,
+) -> AppResult<WritePlan> {
+    use crate::codex::settings::{item_at, read_document, setting_kind, simple_value};
+
+    let path = homes.codex_home.join("config.toml");
+    homes.check_writable(&path)?;
+    let (_, meta, mut doc) = read_document(homes)?;
+    if meta.hash != base_hash {
+        return Err(AppError::external_change(&path));
+    }
+    let mut changed = false;
+    let mut permissions_changed = false;
+    for change in changes {
+        let kind = setting_kind(&change.path)
+            .ok_or_else(|| AppError::invalid("setting is not editable in Codex Settings"))?;
+        let existing = item_at(&doc, &change.path)?;
+        let current = existing.and_then(simple_value);
+        if existing.is_some() && current.as_ref().is_none_or(|v| !kind.matches_shape(v)) {
+            return Err(AppError::invalid(
+                "setting uses custom TOML; edit it in Codex Config",
+            ));
+        }
+        if current == change.value {
+            continue;
+        }
+        if let Some(value) = &change.value {
+            kind.validate(value)?;
+            writeplan::toml_set(&mut doc, &change.path, value)?;
+        } else {
+            writeplan::toml_delete(&mut doc, &change.path);
+        }
+        changed = true;
+        permissions_changed |= matches!(
+            change.path.first().map(String::as_str),
+            Some("default_permissions" | "sandbox_mode" | "sandbox_workspace_write")
+        );
+    }
+    if permissions_changed
+        && doc.contains_key("default_permissions")
+        && (doc.contains_key("sandbox_mode") || doc.contains_key("sandbox_workspace_write"))
+    {
+        return Err(AppError::invalid("named permissions cannot be combined with legacy sandbox settings; edit this combination in Codex Config"));
+    }
+    let text = if changed { doc.to_string() } else { meta.text };
+    // RawText keeps the reviewed batch atomic and refuses all changes after preview.
+    // It also reuses target guards for linked config files and their backup history.
+    let mut plan = plan_save_file_text(homes, &display(&path), text, Some(meta.hash))?;
+    plan.description = "Save Codex settings".into();
+    Ok(plan)
+}
 
 pub fn plan_save_file_text(
     homes: &Homes,

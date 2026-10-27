@@ -6,6 +6,7 @@ export const queryKeys = {
   snapshot: ["snapshot"] as const,
   settings: ["settings"] as const,
   file: (path: string) => ["file", path] as const,
+  codexSettings: (path: string) => ["file", path, "codexSettings"] as const,
   dir: (path: string) => ["dir", path] as const,
   backups: (path: string) => ["backups", path] as const,
 };
@@ -42,6 +43,13 @@ export function useFileText(path: string | null) {
     queryKey: queryKeys.file(path ?? ""),
     queryFn: () => rpc("get_file_text", { path: path ?? "" }),
     enabled: path !== null,
+  });
+}
+
+export function useCodexSettings(path: string) {
+  return useQuery({
+    queryKey: queryKeys.codexSettings(path),
+    queryFn: () => rpc("get_codex_settings", {}),
   });
 }
 

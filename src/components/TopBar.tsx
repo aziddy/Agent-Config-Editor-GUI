@@ -10,6 +10,7 @@ import { useUiStore } from "@/state/uiStore";
 const PAGE_TITLES = {
   projects: "Projects",
   codexConfig: "Codex Config",
+  codexSettings: "Codex Settings",
   settings: "Settings",
 };
 
@@ -25,7 +26,8 @@ export function TopBar({ actions }: { actions?: React.ReactNode }) {
   const toggleEntityList = useUiStore((s) => s.toggleEntityList);
   const qc = useQueryClient();
   const snapshot = useSnapshot();
-  const isEntityKind = nav !== "projects" && nav !== "settings" && nav !== "codexConfig";
+  const isEntityKind =
+    nav !== "projects" && nav !== "settings" && nav !== "codexConfig" && nav !== "codexSettings";
   const title = isEntityKind ? KIND_LABELS[nav].plural : PAGE_TITLES[nav];
   const sidebarLabel = sidebarCollapsed ? "Expand navigation" : "Collapse navigation";
   const listLabel = entityListCollapsed ? "Expand item list" : "Collapse item list";

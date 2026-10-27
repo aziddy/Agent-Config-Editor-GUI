@@ -7,6 +7,8 @@ import type {
   AutomationRunConversation,
   AutomationRunPage,
   BackupInfo,
+  CodexSettingChange,
+  CodexSettings,
   CodexSkillInvocation,
   DirEntryInfo,
   FileText,
@@ -77,6 +79,11 @@ export type AceRpc = {
     result: AutomationRunActivity;
   };
   get_file_text: { args: { path: string }; result: FileText };
+  get_codex_settings: { args: Record<string, never>; result: CodexSettings };
+  preview_save_codex_settings: {
+    args: { changes: CodexSettingChange[]; baseHash: string };
+    result: WritePlan;
+  };
   list_dir: { args: { path: string }; result: DirEntryInfo[] };
   codex_mcp_status: { args: { force?: boolean }; result: Record<string, JsonValue>[] };
 

@@ -23,6 +23,7 @@ pub mod plugins;
 mod run_activity;
 mod run_history;
 pub mod runtime;
+pub mod settings;
 pub mod skill_policy;
 pub mod skills;
 

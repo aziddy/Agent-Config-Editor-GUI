@@ -9,6 +9,7 @@ import {
   Package,
   Plug,
   Settings,
+  SlidersHorizontal,
   Sparkles,
   Terminal,
   TriangleAlert,
@@ -195,6 +196,13 @@ export function Sidebar() {
           onClick={() => go("codexConfig")}
           icon={FileCode2}
           label="Codex Config"
+          collapsed={collapsed}
+        />
+        <NavButton
+          active={nav === "codexSettings"}
+          onClick={() => go("codexSettings")}
+          icon={SlidersHorizontal}
+          label="Codex Settings"
           collapsed={collapsed}
         />
         <NavButton

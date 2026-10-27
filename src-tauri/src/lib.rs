@@ -85,6 +85,8 @@ pub fn run() {
             commands::get_automation_run,
             commands::get_automation_run_activity,
             commands::get_file_text,
+            commands::get_codex_settings,
+            commands::preview_save_codex_settings,
             commands::list_dir,
             commands::get_app_settings,
             commands::set_app_settings,
