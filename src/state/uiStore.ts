@@ -3,7 +3,7 @@ import { type LocationFilter, MEMORY_SOURCE_AGENTS } from "@/lib/entities";
 import type { EntityKind, MemorySource } from "@/lib/types";
 
 export type AgentFilter = "all" | "claude" | "codex";
-export type NavKind = EntityKind | "projects" | "settings";
+export type NavKind = EntityKind | "projects" | "codexConfig" | "settings";
 export type DetailTab = "overview" | "runs" | "editor";
 export type NavigationGuard = () => boolean | Promise<boolean>;
 
@@ -137,7 +137,8 @@ export const useUiStore = create<UiState>((set, get) => ({
         selectedId: null,
         search: "",
         detailTab: "overview",
-        entityListCollapsed: nav !== "projects" && nav !== "settings" ? false : s.entityListCollapsed,
+        entityListCollapsed:
+          nav !== "projects" && nav !== "settings" && nav !== "codexConfig" ? false : s.entityListCollapsed,
       })),
     );
   },

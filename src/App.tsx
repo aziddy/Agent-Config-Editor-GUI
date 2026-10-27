@@ -5,6 +5,7 @@ import { UnsavedChangesDialog } from "@/components/UnsavedChangesDialog";
 import { describeError } from "@/lib/errors";
 import { useConfigChangedListener } from "@/lib/events";
 import { useAppSettings, useSnapshot } from "@/lib/queries";
+import { CodexConfigScreen } from "@/screens/CodexConfigScreen";
 import { EntityScreen } from "@/screens/EntityScreen";
 import { ProjectsScreen } from "@/screens/ProjectsScreen";
 import { SettingsScreen } from "@/screens/SettingsScreen";
@@ -39,6 +40,8 @@ export function App() {
           <div className="p-6 text-sm text-destructive">{describeError(snapshot.error)}</div>
         ) : nav === "projects" ? (
           <ProjectsScreen />
+        ) : nav === "codexConfig" ? (
+          <CodexConfigScreen />
         ) : nav === "settings" ? (
           <SettingsScreen />
         ) : (

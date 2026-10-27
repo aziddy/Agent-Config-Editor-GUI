@@ -2,6 +2,7 @@ import {
   Bot,
   Brain,
   Clock,
+  FileCode2,
   FlaskConical,
   FolderGit2,
   LockKeyhole,
@@ -187,6 +188,13 @@ export function Sidebar() {
           icon={FolderGit2}
           label="Projects"
           count={projectCount}
+          collapsed={collapsed}
+        />
+        <NavButton
+          active={nav === "codexConfig"}
+          onClick={() => go("codexConfig")}
+          icon={FileCode2}
+          label="Codex Config"
           collapsed={collapsed}
         />
         <NavButton

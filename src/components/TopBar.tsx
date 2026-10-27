@@ -7,6 +7,12 @@ import { queryKeys, useSnapshot } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 import { useUiStore } from "@/state/uiStore";
 
+const PAGE_TITLES = {
+  projects: "Projects",
+  codexConfig: "Codex Config",
+  settings: "Settings",
+};
+
 export function TopBar({ actions }: { actions?: React.ReactNode }) {
   const nav = useUiStore((s) => s.nav);
   const search = useUiStore((s) => s.search);
@@ -19,8 +25,8 @@ export function TopBar({ actions }: { actions?: React.ReactNode }) {
   const toggleEntityList = useUiStore((s) => s.toggleEntityList);
   const qc = useQueryClient();
   const snapshot = useSnapshot();
-  const title = nav === "projects" ? "Projects" : nav === "settings" ? "Settings" : KIND_LABELS[nav].plural;
-  const isEntityKind = nav !== "projects" && nav !== "settings";
+  const isEntityKind = nav !== "projects" && nav !== "settings" && nav !== "codexConfig";
+  const title = isEntityKind ? KIND_LABELS[nav].plural : PAGE_TITLES[nav];
   const sidebarLabel = sidebarCollapsed ? "Expand navigation" : "Collapse navigation";
   const listLabel = entityListCollapsed ? "Expand item list" : "Collapse item list";
   const SidebarIcon = sidebarCollapsed ? PanelLeftOpen : PanelLeftClose;
