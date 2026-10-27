@@ -1,10 +1,6 @@
 import type { Nodes, Root } from "mdast";
-import Markdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import { toast } from "sonner";
 import type { Processor } from "unified";
-import { describeError } from "@/lib/errors";
-import { rpc } from "@/lib/rpc";
+import { MarkdownContent } from "@/components/MarkdownContent";
 
 /** Codex inbox metadata is already shown beside the run; keep it out of the response. */
 function remarkRunDirectives(this: Processor) {
@@ -31,36 +27,5 @@ function remarkRunDirectives(this: Processor) {
 }
 
 export function RunMarkdown({ text }: { text: string }) {
-  return (
-    <div className="run-markdown min-w-0 break-words text-sm">
-      <Markdown
-        remarkPlugins={[remarkGfm, remarkRunDirectives]}
-        skipHtml
-        components={{
-          a: ({ href, children }) =>
-            href && /^https?:\/\//i.test(href) ? (
-              <a
-                href={href}
-                onClick={(event) => {
-                  event.preventDefault();
-                  void rpc("open_url", { url: href }).catch((error) => toast.error(describeError(error)));
-                }}
-              >
-                {children}
-              </a>
-            ) : (
-              <span>{children}</span>
-            ),
-          img: ({ alt }) => <span className="text-muted-foreground">[Image{alt ? `: ${alt}` : ""}]</span>,
-          table: ({ children }) => (
-            <div className="overflow-x-auto">
-              <table>{children}</table>
-            </div>
-          ),
-        }}
-      >
-        {text}
-      </Markdown>
-    </div>
-  );
+  return <MarkdownContent text={text} remarkPlugins={[remarkRunDirectives]} />;
 }

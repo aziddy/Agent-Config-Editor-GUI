@@ -8,9 +8,9 @@ use crate::fsutil::{self, display, read_text_with_meta};
 use crate::model::{
     Agent, AppSettings, ApplyResult, AutomationRunActivity, AutomationRunConversation,
     AutomationRunPage, BackupInfo, CodexMcpRuntime, CodexSkillInvocation, DirEntryInfo, FileText,
-    FrontmatterChange, Mutation, Scope, Snapshot, WritePlan,
+    FrontmatterChange, Scope, Snapshot, WritePlan,
 };
-use crate::writeplan::{self, ApplyCtx, PlanInput};
+use crate::writeplan::{self, ApplyCtx};
 use crate::{codex, scan, settings, AppState};
 use serde::Serialize;
 use std::path::{Path, PathBuf};
@@ -74,13 +74,18 @@ pub async fn get_automation_run_activity(
 }
 
 #[tauri::command]
-pub fn scan_all(state: State<'_, AppState>) -> AppResult<Snapshot> {
+pub async fn scan_all(state: State<'_, AppState>) -> AppResult<Snapshot> {
     let settings = settings_of(&state)?;
-    let snapshot = scan::scan_all(&state.homes, &settings);
+    let homes = state.homes.clone();
+    let snapshot = tauri::async_runtime::spawn_blocking(move || scan::scan_all(&homes, &settings))
+        .await
+        .map_err(|_| AppError::conflict("Configuration scan could not finish"))?;
     if let Some(w) = state.watcher.as_ref() {
+        w.watch_homes(&state.homes);
         for p in &snapshot.projects {
-            w.watch_project(Path::new(&p.root));
+            w.watch_project(Path::new(&p.root), &state.homes);
         }
+        w.watch_memories(&snapshot.memories);
     }
     Ok(snapshot)
 }
@@ -246,7 +251,14 @@ pub fn list_backups(state: State<'_, AppState>, path: String) -> AppResult<Vec<B
         .lock()
         .map_err(|_| AppError::conflict("backup lock poisoned"))?
         .clone();
-    backups.list(Path::new(&path))
+    let original = Path::new(&path);
+    let target = fsutil::resolve_write_path(original)?;
+    let mut items = backups.list(&target)?;
+    if target != original {
+        items.extend(backups.list(original)?);
+        items.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+    }
+    Ok(items)
 }
 
 #[tauri::command]
@@ -269,18 +281,8 @@ pub fn preview_restore_backup(state: State<'_, AppState>, id: String) -> AppResu
         .clone();
     let (bak, original) = backups.resolve(&id)?;
     let text = std::fs::read_to_string(&bak).map_err(|e| AppError::io(e, &bak))?;
-    let mut plan = writeplan::build(PlanInput {
-        homes: &state.homes,
-        path: &original,
-        mutation: Mutation::RawText,
-        description: format!("Restore backup {id}"),
-        base_hash: None,
-        text: Some(text),
-        mode: None,
-        extra_files: vec![],
-    })?;
-    // A restore is meant to win over whatever is there now.
-    plan.base_hash = None;
+    let mut plan = actions::plan_save_file_text(&state.homes, &display(&original), text, None)?;
+    plan.description = format!("Restore backup {id}");
     Ok(plan)
 }
 

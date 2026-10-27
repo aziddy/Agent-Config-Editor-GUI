@@ -215,9 +215,17 @@ pub fn plan_save_file_text(
     base_hash: Option<String>,
 ) -> AppResult<WritePlan> {
     let p = PathBuf::from(path);
-    build(PlanInput {
+    homes.check_writable(&p)?;
+    // Editing a linked instruction must update its target, not atomically replace the link.
+    // Keep the source as a guard so retargeting the link invalidates the preview.
+    let target = match std::fs::symlink_metadata(&p) {
+        Ok(_) => Some(std::fs::canonicalize(&p).map_err(|e| AppError::io(e, &p))?),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+        Err(e) => return Err(AppError::io(e, &p)),
+    };
+    let mut plan = build(PlanInput {
         homes,
-        path: &p,
+        path: target.as_deref().unwrap_or(&p),
         mutation: Mutation::RawText,
         description: format!(
             "Save {}",
@@ -227,7 +235,20 @@ pub fn plan_save_file_text(
         text: Some(text),
         mode: None,
         extra_files: vec![],
-    })
+    })?;
+    if let Some(target) = target {
+        plan.source_path = Some(if p.is_absolute() {
+            display(&p)
+        } else {
+            display(
+                &std::env::current_dir()
+                    .map_err(|e| AppError::io(e, &p))?
+                    .join(&p),
+            )
+        });
+        plan.source_target = Some(display(&target));
+    }
+    Ok(plan)
 }
 
 // ---------------------------------------------------------------------------

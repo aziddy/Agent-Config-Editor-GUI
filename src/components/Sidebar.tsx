@@ -1,5 +1,6 @@
 import {
   Bot,
+  Brain,
   Clock,
   FlaskConical,
   FolderGit2,
@@ -14,10 +15,16 @@ import {
 } from "lucide-react";
 import type { ComponentType } from "react";
 import { LocationPicker } from "@/components/LocationPicker";
-import { KIND_LABELS, KIND_ORDER } from "@/lib/entities";
+import {
+  KIND_LABELS,
+  KIND_ORDER,
+  MEMORY_SOURCE_LABELS,
+  MEMORY_SOURCE_ORDER,
+  memorySourceDescription,
+} from "@/lib/entities";
 import { useSnapshot } from "@/lib/queries";
 import type { EntityKind } from "@/lib/types";
-import { useKindCounts } from "@/lib/useEntities";
+import { useKindCounts, useMemorySourceCounts } from "@/lib/useEntities";
 import { cn } from "@/lib/utils";
 import { type AgentFilter, type NavKind, useUiStore } from "@/state/uiStore";
 
@@ -29,6 +36,7 @@ const ICONS: Record<EntityKind, ComponentType<{ className?: string }>> = {
   slashCommand: Terminal,
   hook: Webhook,
   automation: Clock,
+  memory: Brain,
 };
 
 const AGENT_FILTERS: { value: AgentFilter; label: string }[] = [
@@ -44,6 +52,8 @@ function NavButton({
   label,
   count,
   collapsed,
+  expanded,
+  controls,
 }: {
   active: boolean;
   onClick: () => void;
@@ -51,6 +61,8 @@ function NavButton({
   label: string;
   count?: number;
   collapsed: boolean;
+  expanded?: boolean;
+  controls?: string;
 }) {
   return (
     <button
@@ -58,6 +70,8 @@ function NavButton({
       onClick={onClick}
       aria-label={label}
       aria-current={active ? "page" : undefined}
+      aria-expanded={expanded}
+      aria-controls={controls}
       title={collapsed ? `${label}${count !== undefined ? ` (${count})` : ""}` : undefined}
       className={cn(
         "flex w-full items-center gap-2 rounded-md px-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
@@ -81,6 +95,9 @@ export function Sidebar() {
   const setAgentFilter = useUiStore((s) => s.setAgentFilter);
   const collapsed = useUiStore((s) => s.sidebarCollapsed);
   const counts = useKindCounts();
+  const memoryCounts = useMemorySourceCounts();
+  const memorySource = useUiStore((s) => s.memorySource);
+  const navigateToMemorySource = useUiStore((s) => s.navigateToMemorySource);
   const snapshot = useSnapshot();
   const projectCount = snapshot.data?.projects.filter((p) => p.exists).length ?? 0;
   const warningCount = snapshot.data?.warnings.length ?? 0;
@@ -121,15 +138,47 @@ export function Sidebar() {
       </div>
       <nav className={cn("flex-1 space-y-0.5 overflow-y-auto px-2", collapsed && "py-2")}>
         {KIND_ORDER.map((kind) => (
-          <NavButton
-            key={kind}
-            active={nav === kind}
-            onClick={() => go(kind)}
-            icon={ICONS[kind]}
-            label={KIND_LABELS[kind].plural}
-            count={counts[kind]}
-            collapsed={collapsed}
-          />
+          <div key={kind}>
+            <NavButton
+              active={nav === kind && (kind !== "memory" || memorySource === "all" || collapsed)}
+              onClick={() => go(kind)}
+              icon={ICONS[kind]}
+              label={KIND_LABELS[kind].plural}
+              count={counts[kind]}
+              collapsed={collapsed}
+              expanded={kind === "memory" ? nav === "memory" && !collapsed : undefined}
+              controls={kind === "memory" ? "memory-sources" : undefined}
+            />
+            {kind === "memory" && (
+              <ul
+                id="memory-sources"
+                aria-label="Memory sources"
+                hidden={nav !== "memory" || collapsed}
+                className="ml-4 mt-1 space-y-0.5 border-l pl-1"
+              >
+                {MEMORY_SOURCE_ORDER.map((source) => (
+                  <li key={source}>
+                    <button
+                      type="button"
+                      aria-label={MEMORY_SOURCE_LABELS[source]}
+                      aria-current={memorySource === source ? "page" : undefined}
+                      title={memorySourceDescription(source, snapshot.data?.homes)}
+                      onClick={() => void navigateToMemorySource(source)}
+                      className={cn(
+                        "flex w-full items-center gap-1 rounded-md px-2 py-1.5 text-left text-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                        memorySource === source
+                          ? "bg-accent text-accent-foreground"
+                          : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
+                      )}
+                    >
+                      <span className="min-w-0 flex-1 truncate">{MEMORY_SOURCE_LABELS[source]}</span>
+                      <span className="tabular-nums opacity-70">{memoryCounts[source]}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         ))}
         <div className="my-2 border-t" />
         <NavButton

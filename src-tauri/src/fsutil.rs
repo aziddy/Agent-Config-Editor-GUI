@@ -84,11 +84,15 @@ impl Homes {
                 path,
             ));
         }
-        if self.sandbox && !self.allow_project_writes && !path.starts_with(&self.home) {
-            return Err(AppError::read_only(
-                "sandbox mode: refusing to write outside ACE_HOME (set ACE_ALLOW_PROJECT_WRITES=1 to allow)",
-                path,
-            ));
+        if self.sandbox && !self.allow_project_writes {
+            let home = resolve_write_path(&self.home)?;
+            let target = resolve_write_path(path)?;
+            if !target.starts_with(&home) {
+                return Err(AppError::read_only(
+                    "sandbox mode: refusing to write outside ACE_HOME (set ACE_ALLOW_PROJECT_WRITES=1 to allow)",
+                    path,
+                ));
+            }
         }
         Ok(())
     }
@@ -103,6 +107,53 @@ impl Homes {
         }
         PathBuf::from(raw)
     }
+}
+
+/// Resolve links in the existing portion of a path, including for a file not yet created.
+/// The remaining components are normalized so `..` cannot bypass the sandbox boundary.
+pub fn resolve_write_path(path: &Path) -> AppResult<PathBuf> {
+    resolve_write_path_inner(path, 0)
+}
+
+fn resolve_write_path_inner(path: &Path, links: usize) -> AppResult<PathBuf> {
+    if links > 40 {
+        return Err(AppError::invalid("too many symbolic links in write path"));
+    }
+    let absolute = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        std::env::current_dir()
+            .map_err(|e| AppError::io(e, path))?
+            .join(path)
+    };
+    let mut resolved = PathBuf::new();
+    for component in absolute.components() {
+        match component {
+            std::path::Component::ParentDir => {
+                resolved.pop();
+            }
+            std::path::Component::CurDir => {}
+            other => resolved.push(other.as_os_str()),
+        }
+        // A missing/../link suffix can return to an existing symlink. Resolve again at
+        // every component instead of normalizing the whole unresolved suffix at once.
+        match fs::canonicalize(&resolved) {
+            Ok(canonical) => resolved = canonical,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                if fs::symlink_metadata(&resolved).is_ok_and(|meta| meta.is_symlink()) {
+                    let link = fs::read_link(&resolved).map_err(|e| AppError::io(e, &resolved))?;
+                    let target = if link.is_absolute() {
+                        link
+                    } else {
+                        resolved.parent().unwrap_or(Path::new("/")).join(link)
+                    };
+                    resolved = resolve_write_path_inner(&target, links + 1)?;
+                }
+            }
+            Err(e) => return Err(AppError::io(e, &resolved)),
+        }
+    }
+    Ok(resolved)
 }
 
 fn env_flag(name: &str) -> bool {

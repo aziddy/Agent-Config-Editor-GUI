@@ -19,7 +19,15 @@ import type { BackupInfo } from "@/lib/types";
 import { useUiStore } from "@/state/uiStore";
 import { useUnsavedChangesStore } from "@/state/unsavedChangesStore";
 
-export function RawFileEditor({ path, readOnlyHint }: { path: string; readOnlyHint?: string }) {
+export function RawFileEditor({
+  path,
+  readOnly = false,
+  readOnlyHint,
+}: {
+  path: string;
+  readOnly?: boolean;
+  readOnlyHint?: string;
+}) {
   const file = useFileText(path);
   const [session, dispatch] = useReducer(editorSessionReducer, emptyEditorSession);
   const { draft, base } = session;
@@ -41,7 +49,7 @@ export function RawFileEditor({ path, readOnlyHint }: { path: string; readOnlyHi
   const stale = !dirty && (diskChanged || externallyChanged !== undefined);
 
   const save = useCallback(async () => {
-    if (!base || draft === null || saving) return false;
+    if (readOnly || !base || draft === null || saving) return false;
     if (conflict || file.error) {
       toast.error(conflict ? "Reload the file before saving your changes." : describeError(file.error));
       return false;
@@ -58,7 +66,7 @@ export function RawFileEditor({ path, readOnlyHint }: { path: string; readOnlyHi
     } finally {
       setSaving(false);
     }
-  }, [base, draft, saving, conflict, file.error, requestPlan, path, clearExternallyChanged]);
+  }, [base, draft, saving, conflict, file.error, requestPlan, path, clearExternallyChanged, readOnly]);
 
   const reload = useCallback(() => {
     dispatch({ type: "reload", file: file.error ? undefined : file.data });
@@ -106,7 +114,7 @@ export function RawFileEditor({ path, readOnlyHint }: { path: string; readOnlyHi
           <Button
             size="sm"
             className="h-7 gap-1 text-xs"
-            disabled={!dirty || saving || conflict || !!file.error}
+            disabled={readOnly || !dirty || saving || conflict || !!file.error}
             onClick={() => void save()}
           >
             <Save className="h-3.5 w-3.5" /> {saving ? "Saving…" : "Save…"}
@@ -154,14 +162,14 @@ export function RawFileEditor({ path, readOnlyHint }: { path: string; readOnlyHi
           </Button>
         </div>
       )}
-      {showBackups && <BackupList path={path} />}
+      {showBackups && <BackupList path={path} readOnly={readOnly} />}
       {base && draft !== null ? (
         <>
           <CodeEditor
             value={draft}
             language={base.language}
             onChange={(text) => dispatch({ type: "edit", text })}
-            readOnly={saving}
+            readOnly={readOnly || saving}
             minHeight="0px"
             className="min-h-0 flex-1"
           />
@@ -177,7 +185,7 @@ export function RawFileEditor({ path, readOnlyHint }: { path: string; readOnlyHi
   );
 }
 
-function BackupList({ path }: { path: string }) {
+function BackupList({ path, readOnly }: { path: string; readOnly: boolean }) {
   const backups = useQuery({
     queryKey: queryKeys.backups(path),
     queryFn: () => rpc("list_backups", { path }),
@@ -194,7 +202,13 @@ function BackupList({ path }: { path: string }) {
         <li key={b.id} className="flex items-center justify-between gap-2 border-b px-2 py-1 last:border-b-0">
           <span className="font-mono">{new Date(b.createdAt).toLocaleString()}</span>
           <span className="text-muted-foreground">{b.size.toLocaleString()} B</span>
-          <Button variant="outline" size="sm" className="h-6 text-xs" onClick={() => restore(b)}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-6 text-xs"
+            disabled={readOnly}
+            onClick={() => restore(b)}
+          >
             Restore…
           </Button>
         </li>

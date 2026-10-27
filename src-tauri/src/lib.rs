@@ -5,6 +5,7 @@ pub mod commands;
 pub mod error;
 pub mod fsutil;
 pub mod markdown;
+pub mod memories;
 pub mod model;
 pub mod scan;
 pub mod settings;

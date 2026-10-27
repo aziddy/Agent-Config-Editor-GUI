@@ -1,6 +1,6 @@
 import { create } from "zustand";
-import type { LocationFilter } from "@/lib/entities";
-import type { EntityKind } from "@/lib/types";
+import { type LocationFilter, MEMORY_SOURCE_AGENTS } from "@/lib/entities";
+import type { EntityKind, MemorySource } from "@/lib/types";
 
 export type AgentFilter = "all" | "claude" | "codex";
 export type NavKind = EntityKind | "projects" | "settings";
@@ -10,6 +10,7 @@ export type NavigationGuard = () => boolean | Promise<boolean>;
 interface UiState {
   agentFilter: AgentFilter;
   locationFilter: LocationFilter;
+  memorySource: "all" | MemorySource;
   nav: NavKind;
   selectedId: string | null;
   search: string;
@@ -30,6 +31,7 @@ interface UiState {
   clearExternallyChanged: (path: string) => void;
   setAgentFilter: (f: AgentFilter) => Promise<boolean>;
   setLocationFilter: (f: LocationFilter) => Promise<boolean>;
+  navigateToMemorySource: (source: "all" | MemorySource) => Promise<boolean>;
   setNav: (k: NavKind) => Promise<boolean>;
   select: (id: string | null) => Promise<boolean>;
   navigateToEntity: (nav: EntityKind, selectedId: string) => Promise<boolean>;
@@ -52,6 +54,7 @@ function sameLocation(a: LocationFilter, b: LocationFilter): boolean {
 export const useUiStore = create<UiState>((set, get) => ({
   agentFilter: "all",
   locationFilter: { type: "all" },
+  memorySource: "all",
   nav: "skill",
   selectedId: null,
   search: "",
@@ -94,13 +97,39 @@ export const useUiStore = create<UiState>((set, get) => ({
     }),
   setAgentFilter: (agentFilter) => {
     if (agentFilter === get().agentFilter) return Promise.resolve(true);
-    return get().requestNavigation(() => set({ agentFilter, selectedId: null, detailTab: "overview" }));
+    return get().requestNavigation(() =>
+      set((s) => ({
+        agentFilter,
+        memorySource:
+          agentFilter !== "all" &&
+          s.memorySource !== "all" &&
+          !MEMORY_SOURCE_AGENTS[s.memorySource].includes(agentFilter)
+            ? "all"
+            : s.memorySource,
+        selectedId: null,
+        detailTab: "overview",
+      })),
+    );
   },
   setLocationFilter: (locationFilter) => {
     if (sameLocation(locationFilter, get().locationFilter)) return Promise.resolve(true);
     return get().requestNavigation(() => set({ locationFilter, selectedId: null, detailTab: "overview" }));
   },
+  navigateToMemorySource: (memorySource) => {
+    if (get().nav === "memory" && memorySource === get().memorySource) return Promise.resolve(true);
+    return get().requestNavigation(() =>
+      set({
+        nav: "memory",
+        memorySource,
+        selectedId: null,
+        search: "",
+        detailTab: "overview",
+        entityListCollapsed: false,
+      }),
+    );
+  },
   setNav: (nav) => {
+    if (nav === "memory") return get().navigateToMemorySource("all");
     if (nav === get().nav) return Promise.resolve(true);
     return get().requestNavigation(() =>
       set((s) => ({
@@ -117,11 +146,17 @@ export const useUiStore = create<UiState>((set, get) => ({
     return get().requestNavigation(() => set({ selectedId, detailTab: "overview" }));
   },
   navigateToEntity: (nav, selectedId) => {
-    if (nav === get().nav && selectedId === get().selectedId) return Promise.resolve(true);
+    if (
+      nav === get().nav &&
+      selectedId === get().selectedId &&
+      (nav !== "memory" || get().memorySource === "all")
+    )
+      return Promise.resolve(true);
     return get().requestNavigation(() =>
       set((s) => ({
         nav,
         selectedId,
+        memorySource: nav === "memory" ? "all" : s.memorySource,
         search: "",
         detailTab: "overview",
         entityListCollapsed: nav !== s.nav ? false : s.entityListCollapsed,

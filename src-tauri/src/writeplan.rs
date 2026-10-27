@@ -33,8 +33,8 @@ pub fn build(input: PlanInput<'_>) -> AppResult<WritePlan> {
     input.homes.check_writable(path)?;
     let current = read_text_opt(path)?;
     let current_hash = current.as_deref().map(|t| sha256_hex(t.as_bytes()));
-    if let (Some(base), Some(now)) = (&input.base_hash, &current_hash) {
-        if base != now {
+    if let Some(base) = &input.base_hash {
+        if current_hash.as_ref() != Some(base) {
             return Err(AppError::external_change(path));
         }
     }
@@ -74,6 +74,8 @@ pub fn build(input: PlanInput<'_>) -> AppResult<WritePlan> {
     }
     Ok(WritePlan {
         path: display(path),
+        source_path: None,
+        source_target: None,
         base_hash: current_hash,
         new_text,
         unified_diff,
@@ -782,6 +784,24 @@ pub struct ApplyCtx<'a> {
 pub fn apply(ctx: &ApplyCtx<'_>, plan: &WritePlan) -> AppResult<ApplyResult> {
     let path = PathBuf::from(&plan.path);
     ctx.homes.check_writable(&path)?;
+    match (&plan.source_path, &plan.source_target) {
+        (Some(source), Some(target)) => {
+            let source = Path::new(source);
+            ctx.homes.check_writable(source)?;
+            let resolved =
+                fs::canonicalize(source).map_err(|_| AppError::external_change(source))?;
+            let current_target =
+                fs::canonicalize(&path).map_err(|_| AppError::external_change(&path))?;
+            if resolved != Path::new(target)
+                || current_target != Path::new(target)
+                || path != Path::new(target)
+            {
+                return Err(AppError::external_change(source));
+            }
+        }
+        (None, None) => {}
+        _ => return Err(AppError::invalid("incomplete file target guard")),
+    }
     guard_protected(ctx.homes, &path, &plan.mutation)?;
 
     let current = read_text_opt(&path)?;
@@ -844,6 +864,9 @@ pub fn apply(ctx: &ApplyCtx<'_>, plan: &WritePlan) -> AppResult<ApplyResult> {
             let mode = plan.mode.or_else(|| default_mode(ctx.homes, &path));
             atomic_write(&path, &text, mode)?;
             (ctx.on_written)(&path);
+            if let Some(source) = &plan.source_path {
+                (ctx.on_written)(Path::new(source));
+            }
             Ok(ApplyResult {
                 path: plan.path.clone(),
                 new_hash: Some(sha256_hex(text.as_bytes())),
@@ -855,9 +878,12 @@ pub fn apply(ctx: &ApplyCtx<'_>, plan: &WritePlan) -> AppResult<ApplyResult> {
 
 fn default_mode(homes: &Homes, path: &Path) -> Option<u32> {
     // Codex keeps config.toml and auth.json private; everything else it writes is 0644.
-    let private = path.parent() == Some(homes.codex_home.as_path())
+    let codex_home =
+        fsutil::resolve_write_path(&homes.codex_home).unwrap_or_else(|_| homes.codex_home.clone());
+    let resolved = fsutil::resolve_write_path(path).unwrap_or_else(|_| path.to_path_buf());
+    let private = resolved.parent() == Some(codex_home.as_path())
         && matches!(
-            path.file_name().and_then(|n| n.to_str()),
+            resolved.file_name().and_then(|n| n.to_str()),
             Some("config.toml") | Some("auth.json")
         );
     Some(if private { 0o600 } else { 0o644 })

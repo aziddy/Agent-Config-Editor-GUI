@@ -2,13 +2,20 @@ import { describe, expect, it } from "vitest";
 import {
   type AnyEntity,
   countEntitiesByKind,
+  countMemorySources,
+  entitiesOfKind,
+  entityAgents,
+  entityDir,
+  entityFile,
   type FilterOptions,
   filterEntities,
+  findEntity,
   type LocationFilter,
+  memorySourceDescription,
   projectLocations,
   scopeLabel,
 } from "./entities";
-import type { Scope, Skill, Snapshot } from "./types";
+import type { MemoryFile, Scope, Skill, Snapshot } from "./types";
 
 function skill(
   id: string,
@@ -53,6 +60,7 @@ function snapshot(overrides: Partial<Snapshot> = {}): Snapshot {
     commands: [],
     hooks: [],
     automations: [],
+    memories: [],
     dupGroups: [],
     projects: [],
     warnings: [],
@@ -247,6 +255,7 @@ describe("countEntitiesByKind", () => {
       slashCommand: 0,
       hook: 0,
       automation: 0,
+      memory: 0,
     });
     expect(countEntitiesByKind(data, { ...options, collapseDuplicates: false }).skill).toBe(2);
     expect(
@@ -295,5 +304,145 @@ describe("projectLocations", () => {
 
   it("returns no stale project choices after a rescan removes the roots", () => {
     expect(projectLocations(snapshot(), false)).toEqual([]);
+  });
+});
+
+function memory(overrides: Partial<MemoryFile> = {}): Extract<AnyEntity, { kind: "memory" }> {
+  return {
+    kind: "memory",
+    data: {
+      id: "memory:shared",
+      name: "TEAM_GUIDE.md",
+      category: "instruction",
+      source: "instruction",
+      agents: ["claude", "codex"],
+      scopes: [
+        { type: "project", root: "/work/first" },
+        { type: "project", root: "/work/second" },
+      ],
+      paths: ["/work/first/TEAM_GUIDE.md", "/work/second/TEAM_GUIDE.md"],
+      file: "/shared/TEAM_GUIDE.md",
+      dir: "/shared",
+      contentHash: "same-content",
+      generated: false,
+      ...overrides,
+    },
+  };
+}
+
+describe("memory and instruction inventory", () => {
+  it("shows shared files once in All and matches both providers and project associations", () => {
+    const shared = memory();
+    for (const agent of ["all", "claude", "codex"] as const) {
+      expect(filterEntities([shared], { ...base, agent })).toHaveLength(1);
+    }
+    for (const root of ["/work/first", "/work/second"]) {
+      expect(filterEntities([shared], { ...base, location: { type: "project", root } })).toHaveLength(1);
+    }
+    expect(filterEntities([shared], { ...base, location: { type: "scope", scope: "user" } })).toEqual([]);
+    expect(entityAgents(shared)).toEqual(["claude", "codex"]);
+  });
+
+  it("filters sources and metadata without collapsing separate files with identical contents", () => {
+    const instruction = memory();
+    const note = memory({
+      id: "memory:note",
+      name: "MEMORY.md",
+      category: "memory",
+      source: "codexMemory",
+      file: "/other/MEMORY.md",
+    });
+    expect(filterEntities([instruction, note], base)).toHaveLength(2);
+    expect(
+      filterEntities([instruction, note], { ...base, memorySource: "codexMemory" }).map(
+        (r) => r.entity.data.id,
+      ),
+    ).toEqual(["memory:note"]);
+    expect(
+      filterEntities([instruction, note], { ...base, memorySource: "instruction" }).map(
+        (r) => r.entity.data.id,
+      ),
+    ).toEqual(["memory:shared"]);
+    expect(filterEntities([note], { ...base, search: "core codex" })).toHaveLength(1);
+    expect(filterEntities([instruction], { ...base, search: "/work/second" })).toHaveLength(1);
+    expect(filterEntities([instruction], { ...base, search: "/shared/TEAM_GUIDE.md" })).toHaveLength(1);
+  });
+
+  it("finds inventory files, uses the logical path for editing, and includes every project location", () => {
+    const shared = memory();
+    const data = snapshot({ memories: [shared.data] });
+    expect(entitiesOfKind(data, "memory")).toEqual([shared]);
+    expect(findEntity(data, shared.data.id)).toEqual(shared);
+    expect(entityFile(shared)).toBe("/work/first/TEAM_GUIDE.md");
+    expect(entityDir(shared)).toBe("/shared");
+    expect(projectLocations(data, false).map((p) => p.root)).toEqual(["/work/first", "/work/second"]);
+    expect(countEntitiesByKind(data, { ...base, memorySource: "codexMemory" }).memory).toBe(1);
+    expect(
+      countEntitiesByKind(data, { ...base, memorySource: "instruction", search: "missing" }).memory,
+    ).toBe(1);
+  });
+
+  it("counts every source independently while retaining provider and location filters", () => {
+    const data = snapshot({
+      memories: [
+        memory({ id: "core", source: "codexMemory", agents: ["codex"], scopes: [{ type: "user" }] }).data,
+        memory({ id: "automation", source: "automation", agents: ["codex"], scopes: [{ type: "user" }] })
+          .data,
+        memory({
+          id: "claude",
+          source: "claudeProject",
+          agents: ["claude"],
+          scopes: [{ type: "project", root: "/work/first" }],
+        }).data,
+        memory().data,
+      ],
+    });
+    const options: FilterOptions = { ...base, memorySource: "codexMemory", search: "missing" };
+    expect(countMemorySources(data, options)).toEqual({
+      codexMemory: 1,
+      automation: 1,
+      claudeProject: 1,
+      claudeSubagent: 0,
+      instruction: 1,
+      rule: 0,
+    });
+    expect(countEntitiesByKind(data, options).memory).toBe(4);
+    expect(countMemorySources(data, { ...options, agent: "codex" })).toMatchObject({
+      codexMemory: 1,
+      automation: 1,
+      claudeProject: 0,
+      instruction: 1,
+    });
+    expect(
+      countMemorySources(data, { ...options, location: { type: "project", root: "/work/first" } }),
+    ).toMatchObject({
+      codexMemory: 0,
+      automation: 0,
+      claudeProject: 1,
+      instruction: 1,
+    });
+    expect(countMemorySources(undefined, options)).toEqual({
+      codexMemory: 0,
+      automation: 0,
+      claudeProject: 0,
+      claudeSubagent: 0,
+      instruction: 0,
+      rule: 0,
+    });
+  });
+
+  it("describes memory roots using the detected homes", () => {
+    const homes = {
+      home: "/profile",
+      claudeDir: "/profile/claude",
+      claudeState: "/profile/.claude.json",
+      codexHome: "/profile/codex",
+      agentsDir: "/profile/.agents",
+      sandbox: true,
+      readOnly: false,
+    };
+    expect(memorySourceDescription("codexMemory", homes)).toContain("/profile/codex/memories");
+    expect(memorySourceDescription("automation", homes)).toContain("/profile/codex/automations/*/memory.md");
+    expect(memorySourceDescription("claudeProject", homes)).toContain("/profile/claude/projects/*/memory");
   });
 });

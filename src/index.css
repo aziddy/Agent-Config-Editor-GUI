@@ -99,87 +99,87 @@
   background: hsl(var(--muted) / 0.5);
 }
 
-.run-markdown {
+.markdown-content {
   line-height: 1.65;
 }
-.run-markdown > :first-child {
+.markdown-content > :first-child {
   margin-top: 0;
 }
-.run-markdown > :last-child {
+.markdown-content > :last-child {
   margin-bottom: 0;
 }
-.run-markdown p,
-.run-markdown ul,
-.run-markdown ol,
-.run-markdown pre,
-.run-markdown blockquote {
+.markdown-content p,
+.markdown-content ul,
+.markdown-content ol,
+.markdown-content pre,
+.markdown-content blockquote {
   margin: 0.75rem 0;
 }
-.run-markdown ul,
-.run-markdown ol {
+.markdown-content ul,
+.markdown-content ol {
   padding-left: 1.5rem;
 }
-.run-markdown ul {
+.markdown-content ul {
   list-style: disc;
 }
-.run-markdown ol {
+.markdown-content ol {
   list-style: decimal;
 }
-.run-markdown li + li {
+.markdown-content li + li {
   margin-top: 0.25rem;
 }
-.run-markdown h1,
-.run-markdown h2,
-.run-markdown h3,
-.run-markdown h4 {
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3,
+.markdown-content h4 {
   font-weight: 600;
   margin: 1rem 0 0.5rem;
 }
-.run-markdown h1 {
+.markdown-content h1 {
   font-size: 1.25rem;
 }
-.run-markdown h2 {
+.markdown-content h2 {
   font-size: 1.125rem;
 }
-.run-markdown code {
+.markdown-content code {
   background: hsl(var(--muted));
   padding: 0.1rem 0.25rem;
   border-radius: 0.25rem;
   font-size: 0.85em;
 }
-.run-markdown pre {
+.markdown-content pre {
   overflow-x: auto;
   background: hsl(var(--muted) / 0.5);
   padding: 0.75rem;
   border-radius: 0.375rem;
 }
-.run-markdown pre code {
+.markdown-content pre code {
   background: transparent;
   padding: 0;
 }
-.run-markdown a {
+.markdown-content a {
   text-decoration: underline;
   text-underline-offset: 3px;
 }
-.run-markdown blockquote {
+.markdown-content blockquote {
   border-left: 2px solid hsl(var(--border));
   padding-left: 0.75rem;
   color: hsl(var(--muted-foreground));
 }
-.run-markdown table {
+.markdown-content table {
   border-collapse: collapse;
   margin: 0.75rem 0;
   font-size: 0.85em;
 }
-.run-markdown th,
-.run-markdown td {
+.markdown-content th,
+.markdown-content td {
   border: 1px solid hsl(var(--border));
   padding: 0.4rem 0.6rem;
   text-align: left;
 }
-.run-markdown th {
+.markdown-content th {
   background: hsl(var(--muted) / 0.5);
 }
-.run-markdown hr {
+.markdown-content hr {
   margin: 1rem 0;
 }

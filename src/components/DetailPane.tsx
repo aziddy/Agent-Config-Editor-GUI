@@ -4,10 +4,18 @@ import { AgentBadge } from "@/components/AgentBadge";
 import { FileEditor } from "@/components/FileEditor";
 import { PathActions } from "@/components/PathActions";
 import { RawFileEditor } from "@/components/RawFileEditor";
-import { ScopeBadge } from "@/components/ScopeBadge";
+import { ScopeBadges } from "@/components/ScopeBadge";
 import { Button } from "@/components/ui/button";
 import { Tabs } from "@/components/ui/tabs";
-import { type AnyEntity, entityDir, entityFile, entityName, entityScope } from "@/lib/entities";
+import {
+  type AnyEntity,
+  entityAgents,
+  entityDir,
+  entityFile,
+  entityName,
+  entityScope,
+  entityScopes,
+} from "@/lib/entities";
 import { useRequestPlan } from "@/lib/mutations";
 import { rpc } from "@/lib/rpc";
 import { useSelectedEntity } from "@/lib/useEntities";
@@ -16,6 +24,7 @@ import { AutomationRuns } from "@/screens/detail/AutomationRuns";
 import { FrontmatterEntityDetail } from "@/screens/detail/FrontmatterEntityDetail";
 import { HookDetail } from "@/screens/detail/HookDetail";
 import { McpDetail } from "@/screens/detail/McpDetail";
+import { MemoryDetail } from "@/screens/detail/MemoryDetail";
 import { PluginDetail } from "@/screens/detail/PluginDetail";
 import { type DetailTab, useUiStore } from "@/state/uiStore";
 
@@ -33,6 +42,8 @@ function Overview({ entity, onOpenFile }: { entity: AnyEntity; onOpenFile: (p: s
       return <HookDetail hook={entity.data} />;
     case "automation":
       return <AutomationDetail automation={entity.data} onOpenFile={onOpenFile} />;
+    case "memory":
+      return <MemoryDetail memory={entity.data} onOpenFile={onOpenFile} />;
   }
 }
 
@@ -76,12 +87,18 @@ function SelectedDetailPane({ entity, unavailable }: { entity: AnyEntity; unavai
   const requestNavigation = useUiStore((s) => s.requestNavigation);
   const requestPlan = useRequestPlan();
   const [file, setFile] = useState(() => entityFile(entity));
-  const dir = entityDir(entity);
+  const managedMemory =
+    entity.kind === "memory" && entity.data.scopes.some((scope) => scope.type === "managed");
+  const dir = managedMemory ? null : entityDir(entity);
   const description = "description" in entity.data ? entity.data.description : null;
-  const pluginHint =
-    entity.data.scope.type === "plugin"
-      ? `Provided by plugin ${entity.data.scope.pluginId}; edits are lost when the plugin updates.`
-      : undefined;
+  const scope = entityScope(entity);
+  const editorHint = managedMemory
+    ? "Managed instructions are read-only."
+    : entity.kind === "memory" && entity.data.generated && entity.data.agents.includes("codex")
+      ? "Codex may regenerate this file. Keep required rules in instruction files."
+      : scope.type === "plugin"
+        ? `Provided by plugin ${scope.pluginId}; edits are lost when the plugin updates.`
+        : undefined;
   const deletable = deletablePath(entity);
   const openFile = (p: string) => {
     if (p === file) {
@@ -102,8 +119,10 @@ function SelectedDetailPane({ entity, unavailable }: { entity: AnyEntity; unavai
             <h2 className="truncate text-base font-semibold">{entityName(entity)}</h2>
             {description && <p className="line-clamp-2 text-xs text-muted-foreground">{description}</p>}
             <div className="mt-1.5 flex flex-wrap items-center gap-1">
-              <AgentBadge agent={entity.data.agent} />
-              <ScopeBadge scope={entityScope(entity)} />
+              {entityAgents(entity).map((agent) => (
+                <AgentBadge key={agent} agent={agent} />
+              ))}
+              <ScopeBadges scopes={entityScopes(entity)} />
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-1">
@@ -149,7 +168,7 @@ function SelectedDetailPane({ entity, unavailable }: { entity: AnyEntity; unavai
       <div hidden={tab !== "editor"} className="min-h-0 flex-1 p-3">
         <FileEditor root={dir} selectedPath={file} onOpenFile={openFile}>
           {file ? (
-            <RawFileEditor key={file} path={file} readOnlyHint={pluginHint} />
+            <RawFileEditor key={file} path={file} readOnly={managedMemory} readOnlyHint={editorHint} />
           ) : (
             <p className="p-3 text-sm text-muted-foreground">Select a file to edit.</p>
           )}

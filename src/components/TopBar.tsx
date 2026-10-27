@@ -69,7 +69,7 @@ export function TopBar({ actions }: { actions?: React.ReactNode }) {
         </div>
       )}
       <div className="ml-auto flex shrink-0 items-center gap-2">
-        {isEntityKind && (
+        {isEntityKind && nav !== "memory" && (
           <Button
             variant="ghost"
             size="sm"

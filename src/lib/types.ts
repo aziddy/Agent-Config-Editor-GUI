@@ -10,7 +10,8 @@ export type EntityKind =
   | "subAgent"
   | "slashCommand"
   | "hook"
-  | "automation";
+  | "automation"
+  | "memory";
 
 export type Scope =
   | { type: "user" }
@@ -205,6 +206,29 @@ export interface Automation {
   extra: JsonMap;
 }
 
+export type MemoryCategory = "memory" | "instruction";
+export type MemorySource =
+  | "claudeProject"
+  | "claudeSubagent"
+  | "codexMemory"
+  | "automation"
+  | "instruction"
+  | "rule";
+
+export interface MemoryFile {
+  id: string;
+  name: string;
+  category: MemoryCategory;
+  source: MemorySource;
+  agents: Agent[];
+  scopes: Scope[];
+  paths: string[];
+  file: string;
+  dir: string;
+  contentHash: string;
+  generated: boolean;
+}
+
 export interface DuplicateGroup {
   key: string;
   kind: EntityKind;
@@ -297,6 +321,7 @@ export interface Snapshot {
   commands: SlashCommand[];
   hooks: HookEvent[];
   automations: Automation[];
+  memories: MemoryFile[];
   dupGroups: DuplicateGroup[];
   projects: ProjectRef[];
   warnings: Warning[];
@@ -341,6 +366,8 @@ export interface ExtraFile {
 
 export interface WritePlan {
   path: string;
+  sourcePath?: string | null;
+  sourceTarget?: string | null;
   baseHash: string | null;
   newText: string | null;
   unifiedDiff: string;

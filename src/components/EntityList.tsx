@@ -2,8 +2,8 @@ import { AlertCircle, Copy, KeyRound } from "lucide-react";
 import type { ReactNode } from "react";
 import { AgentBadge } from "@/components/AgentBadge";
 import { EnabledSwitch } from "@/components/EnabledSwitch";
-import { ScopeBadge } from "@/components/ScopeBadge";
-import { type AnyEntity, entityName, entityScope } from "@/lib/entities";
+import { ScopeBadges } from "@/components/ScopeBadge";
+import { type AnyEntity, entityAgents, entityName, entityScopes, MEMORY_SOURCE_LABELS } from "@/lib/entities";
 import type { EnabledState } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useUiStore } from "@/state/uiStore";
@@ -68,8 +68,15 @@ export function EntityList({
               </div>
               {row.subtitle && <div className="truncate text-xs text-muted-foreground">{row.subtitle}</div>}
               <div className="mt-1 flex flex-wrap items-center gap-1">
-                <AgentBadge agent={row.entity.data.agent} />
-                <ScopeBadge scope={entityScope(row.entity)} />
+                {entityAgents(row.entity).map((agent) => (
+                  <AgentBadge key={agent} agent={agent} />
+                ))}
+                <ScopeBadges scopes={entityScopes(row.entity)} />
+                {row.entity.kind === "memory" && (
+                  <span className="text-[10px] text-muted-foreground">
+                    {MEMORY_SOURCE_LABELS[row.entity.data.source]}
+                  </span>
+                )}
               </div>
             </button>
             {row.enabled && (

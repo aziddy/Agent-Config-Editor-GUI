@@ -30,6 +30,7 @@ pub enum EntityKind {
     SlashCommand,
     Hook,
     Automation,
+    Memory,
 }
 
 impl EntityKind {
@@ -42,6 +43,7 @@ impl EntityKind {
             EntityKind::SlashCommand => "command",
             EntityKind::Hook => "hook",
             EntityKind::Automation => "automation",
+            EntityKind::Memory => "memory",
         }
     }
 }
@@ -481,6 +483,43 @@ pub struct HomesInfo {
     pub read_only: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum MemoryCategory {
+    Memory,
+    Instruction,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum MemorySource {
+    ClaudeProject,
+    ClaudeSubagent,
+    CodexMemory,
+    Automation,
+    Instruction,
+    Rule,
+}
+
+/// Inventory of one physical file. Contents are read on demand through the file RPC.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MemoryFile {
+    pub id: String,
+    pub name: String,
+    pub category: MemoryCategory,
+    pub source: MemorySource,
+    pub agents: Vec<Agent>,
+    pub scopes: Vec<Scope>,
+    /// Paths through which the file was discovered, including symbolic links.
+    pub paths: Vec<String>,
+    /// Canonical target, used as the physical-file identity.
+    pub file: String,
+    pub dir: String,
+    pub content_hash: String,
+    pub generated: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Snapshot {
@@ -493,6 +532,7 @@ pub struct Snapshot {
     pub commands: Vec<SlashCommand>,
     pub hooks: Vec<HookEvent>,
     pub automations: Vec<Automation>,
+    pub memories: Vec<MemoryFile>,
     pub dup_groups: Vec<DuplicateGroup>,
     pub projects: Vec<ProjectRef>,
     pub warnings: Vec<Warning>,
@@ -578,6 +618,10 @@ pub struct ExtraFile {
 #[serde(rename_all = "camelCase")]
 pub struct WritePlan {
     pub path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_target: Option<String>,
     /// Hash of the file when the plan was built. `None` for a new file.
     pub base_hash: Option<String>,
     /// `None` means delete.

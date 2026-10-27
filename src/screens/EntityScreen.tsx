@@ -4,8 +4,16 @@ import { DetailPane } from "@/components/DetailPane";
 import { EntityList, type Row } from "@/components/EntityList";
 import { TopBar } from "@/components/TopBar";
 import { Button } from "@/components/ui/button";
-import { type AnyEntity, basename, KIND_LABELS, locationFilterLabel } from "@/lib/entities";
+import {
+  type AnyEntity,
+  basename,
+  KIND_LABELS,
+  locationFilterLabel,
+  MEMORY_SOURCE_LABELS,
+  memorySourceDescription,
+} from "@/lib/entities";
 import { useRequestPlan } from "@/lib/mutations";
+import { useSnapshot } from "@/lib/queries";
 import { rpc } from "@/lib/rpc";
 import type { EntityKind } from "@/lib/types";
 import { useFilteredEntities } from "@/lib/useEntities";
@@ -79,6 +87,8 @@ function useRowBuilder() {
               : undefined,
         };
       }
+      case "memory":
+        return { ...base, subtitle: entity.data.paths[0] ?? entity.data.file };
       case "subAgent":
         return { ...base, subtitle: entity.data.description ?? entity.data.model ?? undefined };
       case "slashCommand":
@@ -111,6 +121,8 @@ export function EntityScreen({ kind }: { kind: EntityKind }) {
   const location = useUiStore((s) => s.locationFilter);
   const setLocation = useUiStore((s) => s.setLocationFilter);
   const entityListCollapsed = useUiStore((s) => s.entityListCollapsed);
+  const memorySource = useUiStore((s) => s.memorySource);
+  const snapshot = useSnapshot();
   const buildRow = useRowBuilder();
   const [creating, setCreating] = useState(false);
   const rows = filtered.map((f) => buildRow(f.entity, f.duplicateCount));
@@ -133,6 +145,14 @@ export function EntityScreen({ kind }: { kind: EntityKind }) {
           hidden={entityListCollapsed}
           className="w-[380px] shrink-0 overflow-y-auto border-r"
         >
+          {kind === "memory" && memorySource !== "all" && (
+            <div className="space-y-1 border-b px-3 py-2">
+              <h2 className="text-sm font-medium">{MEMORY_SOURCE_LABELS[memorySource]}</h2>
+              <p className="break-words text-xs text-muted-foreground">
+                {memorySourceDescription(memorySource, snapshot.data?.homes)}
+              </p>
+            </div>
+          )}
           <EntityList
             rows={rows}
             emptyText={

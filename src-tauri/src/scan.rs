@@ -2,8 +2,8 @@
 
 use crate::fsutil::{self, Homes};
 use crate::model::{
-    Agent, AppSettings, Automation, DuplicateGroup, EntityKind, HookEvent, McpServer, Plugin,
-    ProjectRef, Skill, SlashCommand, Snapshot, SubAgent, Warning,
+    Agent, AppSettings, Automation, DuplicateGroup, EntityKind, HookEvent, McpServer, MemoryFile,
+    Plugin, ProjectRef, Skill, SlashCommand, Snapshot, SubAgent, Warning,
 };
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -26,6 +26,7 @@ pub struct ScanOut {
     pub commands: Vec<SlashCommand>,
     pub hooks: Vec<HookEvent>,
     pub automations: Vec<Automation>,
+    pub memories: Vec<MemoryFile>,
     pub projects: Vec<ProjectRef>,
     pub warnings: Vec<Warning>,
     pub file_hashes: BTreeMap<String, String>,
@@ -68,6 +69,7 @@ pub fn scan_all(homes: &Homes, settings: &AppSettings) -> Snapshot {
 
     crate::claude::scan(&ctx, &mut out);
     crate::codex::scan(&ctx, &mut out);
+    crate::memories::scan(&ctx, &mut out);
 
     out.projects.sort_by(|a, b| a.root.cmp(&b.root));
     let dup_groups = dedupe(&mut out);
@@ -82,6 +84,7 @@ pub fn scan_all(homes: &Homes, settings: &AppSettings) -> Snapshot {
         commands: out.commands,
         hooks: out.hooks,
         automations: out.automations,
+        memories: out.memories,
         dup_groups,
         projects: out.projects,
         warnings: out.warnings,

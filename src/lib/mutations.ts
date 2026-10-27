@@ -30,6 +30,10 @@ export function useApplyPlan() {
     onSuccess: (result, plan) => {
       void qc.invalidateQueries({ queryKey: queryKeys.snapshot });
       void qc.invalidateQueries({ queryKey: queryKeys.file(plan.path) });
+      if (plan.sourcePath) {
+        void qc.invalidateQueries({ queryKey: queryKeys.file(plan.sourcePath) });
+        void qc.invalidateQueries({ queryKey: queryKeys.backups(plan.sourcePath) });
+      }
       for (const extra of plan.extraFiles) {
         void qc.invalidateQueries({ queryKey: queryKeys.file(extra.path) });
       }

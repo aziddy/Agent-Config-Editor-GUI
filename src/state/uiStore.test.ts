@@ -106,6 +106,7 @@ describe("editor navigation guard", () => {
     { name: "entity selection", navigate: () => useUiStore.getState().select("other-skill") },
     { name: "category", navigate: () => useUiStore.getState().setNav("automation") },
     { name: "agent filter", navigate: () => useUiStore.getState().setAgentFilter("codex") },
+    { name: "memory source", navigate: () => useUiStore.getState().navigateToMemorySource("automation") },
     {
       name: "location filter",
       navigate: () => useUiStore.getState().setLocationFilter({ type: "project", root: "/work/repo" }),
@@ -131,6 +132,7 @@ describe("editor navigation guard", () => {
         nav: before.nav,
         agentFilter: before.agentFilter,
         locationFilter: before.locationFilter,
+        memorySource: before.memorySource,
         detailTab: before.detailTab,
         search: before.search,
         navigationPending: false,
@@ -274,4 +276,93 @@ it("retains the tree width and folded state across entity changes and clamps wid
   expect(useUiStore.getState().editorTreeWidth).toBe(140);
   actions.setEditorTreeWidth(Number.NaN);
   expect(useUiStore.getState().editorTreeWidth).toBe(140);
+});
+
+it("changes memory source only after the draft guard allows navigation", async () => {
+  const actions = useUiStore.getState();
+  await actions.setNav("memory");
+  await actions.select("memory-file");
+  actions.setDetailTab("editor");
+  actions.setNavigationGuard(() => false);
+  expect(await actions.navigateToMemorySource("automation")).toBe(false);
+  expect(useUiStore.getState()).toMatchObject({
+    memorySource: "all",
+    selectedId: "memory-file",
+    detailTab: "editor",
+  });
+  actions.setNavigationGuard(() => true);
+  expect(await actions.navigateToMemorySource("automation")).toBe(true);
+  expect(useUiStore.getState()).toMatchObject({
+    memorySource: "automation",
+    selectedId: null,
+    detailTab: "overview",
+  });
+});
+
+it("enters a memory source atomically and returns to all sources through the parent", async () => {
+  const actions = editingState();
+  const guard = vi.fn(() => true);
+  actions.setNavigationGuard(guard);
+  const destinations: string[] = [];
+  const unsubscribe = useUiStore.subscribe((state) => {
+    if (state.nav === "memory") destinations.push(state.memorySource);
+  });
+  expect(await actions.navigateToMemorySource("codexMemory")).toBe(true);
+  unsubscribe();
+  expect(guard).toHaveBeenCalledOnce();
+  expect(destinations.every((source) => source === "codexMemory")).toBe(true);
+  expect(useUiStore.getState()).toMatchObject({
+    nav: "memory",
+    memorySource: "codexMemory",
+    search: "",
+    selectedId: null,
+    entityListCollapsed: false,
+  });
+  await actions.select("core-file");
+  actions.setDetailTab("editor");
+  guard.mockClear();
+  expect(await actions.navigateToMemorySource("codexMemory")).toBe(true);
+  expect(guard).not.toHaveBeenCalled();
+  actions.toggleSidebar();
+  expect(useUiStore.getState().memorySource).toBe("codexMemory");
+  actions.setNavigationGuard(() => false);
+  expect(await actions.setNav("memory")).toBe(false);
+  expect(useUiStore.getState()).toMatchObject({
+    memorySource: "codexMemory",
+    selectedId: "core-file",
+    detailTab: "editor",
+  });
+  actions.setNavigationGuard(() => true);
+  expect(await actions.setNav("memory")).toBe(true);
+  expect(useUiStore.getState()).toMatchObject({
+    memorySource: "all",
+    selectedId: null,
+    sidebarCollapsed: true,
+  });
+});
+
+it("clears source filtering for direct memory links and resets incompatible sources on provider changes", async () => {
+  const actions = useUiStore.getState();
+  await actions.navigateToMemorySource("codexMemory");
+  await actions.navigateToEntity("memory", "automation-file");
+  expect(useUiStore.getState()).toMatchObject({
+    nav: "memory",
+    memorySource: "all",
+    selectedId: "automation-file",
+  });
+  await actions.navigateToMemorySource("codexMemory");
+  actions.setNavigationGuard(() => false);
+  expect(await actions.setAgentFilter("claude")).toBe(false);
+  expect(useUiStore.getState()).toMatchObject({ agentFilter: "all", memorySource: "codexMemory" });
+  actions.setNavigationGuard(null);
+  await actions.setAgentFilter("claude");
+  expect(useUiStore.getState()).toMatchObject({ agentFilter: "claude", memorySource: "all" });
+  await actions.navigateToMemorySource("claudeProject");
+  await actions.setAgentFilter("all");
+  expect(useUiStore.getState().memorySource).toBe("claudeProject");
+  await actions.setAgentFilter("codex");
+  expect(useUiStore.getState().memorySource).toBe("all");
+  await actions.navigateToMemorySource("instruction");
+  await actions.setAgentFilter("claude");
+  expect(useUiStore.getState().memorySource).toBe("instruction");
 });
