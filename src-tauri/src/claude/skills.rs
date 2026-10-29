@@ -8,7 +8,7 @@ use super::{
     clean_description, file_id, file_name, origin, project_scope, read_markdown, sorted_dir, AGENT,
 };
 use crate::fsutil;
-use crate::markdown::frontmatter::{field_str, preview};
+use crate::markdown::frontmatter::{field_bool, field_str, preview, ParsedMarkdown};
 use crate::model::{EnabledState, EntityKind, Locator, Scope, Skill};
 use crate::scan::{ScanCtx, ScanOut};
 use std::path::{Path, PathBuf};
@@ -63,6 +63,7 @@ fn read_skill(path: &Path, scope: &Scope, out: &mut ScanOut) -> Option<Skill> {
         origin: origin(scope.clone(), path, Locator::MarkdownFile),
         dir: fsutil::display(dir),
         enabled: EnabledState::read_only(NO_TOGGLE_REASON),
+        allow_implicit_invocation: implicit_invocation(&parsed, path, out),
         frontmatter: parsed.frontmatter,
         is_system: false,
         lock_managed: false,
@@ -70,4 +71,30 @@ fn read_skill(path: &Path, scope: &Scope, out: &mut ScanOut) -> Option<Skill> {
         dup_group: None,
         body_preview: preview(&parsed.body, 160),
     })
+}
+
+fn implicit_invocation(parsed: &ParsedMarkdown, path: &Path, out: &mut ScanOut) -> Option<bool> {
+    // read_markdown may recover fields from lenient Claude frontmatter. Only an
+    // unrecoverable block is unknown; its warning has already been recorded.
+    if parsed.warning.is_some() && parsed.frontmatter.fields.is_empty() {
+        return None;
+    }
+    match parsed.frontmatter.fields.get("disable-model-invocation") {
+        None => Some(true),
+        Some(serde_json::Value::Bool(_)) => {
+            Some(!field_bool(&parsed.frontmatter, "disable-model-invocation"))
+        }
+        Some(serde_json::Value::String(value))
+            if matches!(
+                value.trim().to_ascii_lowercase().as_str(),
+                "true" | "yes" | "false" | "no"
+            ) =>
+        {
+            Some(!field_bool(&parsed.frontmatter, "disable-model-invocation"))
+        }
+        _ => {
+            out.warn(Some(path), "disable-model-invocation must be a boolean");
+            None
+        }
+    }
 }

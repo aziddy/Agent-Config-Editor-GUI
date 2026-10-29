@@ -1,5 +1,11 @@
 import { create } from "zustand";
-import { type LocationFilter, MEMORY_SOURCE_AGENTS } from "@/lib/entities";
+import {
+  DEFAULT_SKILL_FILTERS,
+  hasSkillFilters,
+  type LocationFilter,
+  MEMORY_SOURCE_AGENTS,
+  type SkillFilters,
+} from "@/lib/entities";
 import type { EntityKind, MemorySource } from "@/lib/types";
 
 export type AgentFilter = "all" | "claude" | "codex";
@@ -11,6 +17,7 @@ interface UiState {
   agentFilter: AgentFilter;
   locationFilter: LocationFilter;
   memorySource: "all" | MemorySource;
+  skillFilters: SkillFilters;
   nav: NavKind;
   selectedId: string | null;
   search: string;
@@ -31,6 +38,7 @@ interface UiState {
   clearExternallyChanged: (path: string) => void;
   setAgentFilter: (f: AgentFilter) => Promise<boolean>;
   setLocationFilter: (f: LocationFilter) => Promise<boolean>;
+  setSkillFilters: (filters: SkillFilters) => Promise<boolean>;
   navigateToMemorySource: (source: "all" | MemorySource) => Promise<boolean>;
   setNav: (k: NavKind) => Promise<boolean>;
   select: (id: string | null) => Promise<boolean>;
@@ -55,6 +63,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   agentFilter: "all",
   locationFilter: { type: "all" },
   memorySource: "all",
+  skillFilters: DEFAULT_SKILL_FILTERS,
   nav: "skill",
   selectedId: null,
   search: "",
@@ -115,6 +124,13 @@ export const useUiStore = create<UiState>((set, get) => ({
     if (sameLocation(locationFilter, get().locationFilter)) return Promise.resolve(true);
     return get().requestNavigation(() => set({ locationFilter, selectedId: null, detailTab: "overview" }));
   },
+  setSkillFilters: (skillFilters) => {
+    const current = get().skillFilters;
+    if ((Object.keys(current) as (keyof SkillFilters)[]).every((key) => current[key] === skillFilters[key])) {
+      return Promise.resolve(true);
+    }
+    return get().requestNavigation(() => set({ skillFilters, selectedId: null, detailTab: "overview" }));
+  },
   navigateToMemorySource: (memorySource) => {
     if (get().nav === "memory" && memorySource === get().memorySource) return Promise.resolve(true);
     return get().requestNavigation(() =>
@@ -152,7 +168,8 @@ export const useUiStore = create<UiState>((set, get) => ({
     if (
       nav === get().nav &&
       selectedId === get().selectedId &&
-      (nav !== "memory" || get().memorySource === "all")
+      (nav !== "memory" || get().memorySource === "all") &&
+      (nav !== "skill" || !hasSkillFilters(get().skillFilters))
     )
       return Promise.resolve(true);
     return get().requestNavigation(() =>
@@ -160,6 +177,7 @@ export const useUiStore = create<UiState>((set, get) => ({
         nav,
         selectedId,
         memorySource: nav === "memory" ? "all" : s.memorySource,
+        skillFilters: nav === "skill" ? DEFAULT_SKILL_FILTERS : s.skillFilters,
         search: "",
         detailTab: "overview",
         entityListCollapsed: nav !== s.nav ? false : s.entityListCollapsed,

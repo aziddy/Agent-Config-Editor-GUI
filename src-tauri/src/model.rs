@@ -167,6 +167,8 @@ pub struct Skill {
     /// Directory containing SKILL.md.
     pub dir: String,
     pub enabled: EnabledState,
+    /// Configured invocation policy; None when the policy could not be read or parsed.
+    pub allow_implicit_invocation: Option<bool>,
     pub frontmatter: Frontmatter,
     pub is_system: bool,
     /// Present in `~/.agents/.skill-lock.json` (installer managed).

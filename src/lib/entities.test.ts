@@ -3,6 +3,7 @@ import {
   type AnyEntity,
   countEntitiesByKind,
   countMemorySources,
+  DEFAULT_SKILL_FILTERS,
   entitiesOfKind,
   entityAgents,
   entityDir,
@@ -13,6 +14,7 @@ import {
   type LocationFilter,
   memorySourceDescription,
   projectLocations,
+  type SkillFilters,
   scopeLabel,
 } from "./entities";
 import type { MemoryFile, Scope, Skill, Snapshot } from "./types";
@@ -39,6 +41,7 @@ function skill(
     },
     dir: `${root}/.claude/skills/shared`,
     enabled: { enabled: null, editable: false, toggle: null, reason: null },
+    allowImplicitInvocation: true,
     frontmatter: { fields: {}, raw: "", present: true },
     isSystem: scope.type === "system",
     lockManaged: false,
@@ -226,6 +229,117 @@ describe("filterEntities", () => {
     expect(
       filterEntities([automation], { ...base, location: { type: "scope", scope: "user" } }),
     ).toHaveLength(1);
+  });
+});
+
+describe("skill filters", () => {
+  function examples() {
+    const claude = skill("claude", null, "/work/repo");
+    const allowed = skill("allowed", null, "/work/repo", "codex");
+    allowed.data.enabled.enabled = true;
+    const blocked = skill("blocked", null, "/work/repo", "codex");
+    blocked.data.allowImplicitInvocation = false;
+    blocked.data.enabled.enabled = false;
+    const unknown = skill("unknown", null, "/work/repo", "codex");
+    unknown.data.allowImplicitInvocation = null;
+    unknown.data.enabled.enabled = true;
+    const builtIn = skill("built-in", null, { type: "system" }, "codex");
+    builtIn.data.enabled.enabled = true;
+    const managed = skill("managed", null, { type: "user" }, "codex");
+    managed.data.lockManaged = true;
+    managed.data.allowImplicitInvocation = false;
+    managed.data.enabled.enabled = true;
+    managed.data.origin.file = "/profile/.agents/skills/managed/SKILL.md";
+    return [claude, allowed, blocked, unknown, builtIn, managed];
+  }
+
+  const cases: { filters: Partial<SkillFilters>; ids: string[] }[] = [
+    { filters: {}, ids: ["claude", "allowed", "blocked", "unknown", "built-in", "managed"] },
+    { filters: { invocation: "allowed" }, ids: ["claude", "allowed", "built-in"] },
+    { filters: { invocation: "blocked" }, ids: ["blocked", "managed"] },
+    { filters: { invocation: "unknown" }, ids: ["unknown"] },
+    { filters: { enabled: "enabled" }, ids: ["allowed", "unknown", "built-in", "managed"] },
+    { filters: { enabled: "disabled" }, ids: ["blocked"] },
+    { filters: { enabled: "notApplicable" }, ids: ["claude"] },
+    { filters: { builtIn: "yes" }, ids: ["built-in"] },
+    { filters: { builtIn: "no" }, ids: ["claude", "allowed", "blocked", "unknown", "managed"] },
+    { filters: { installerManaged: "yes" }, ids: ["managed"] },
+    { filters: { installerManaged: "no" }, ids: ["claude", "allowed", "blocked", "unknown", "built-in"] },
+    {
+      filters: { invocation: "blocked", enabled: "enabled", builtIn: "no", installerManaged: "yes" },
+      ids: ["managed"],
+    },
+  ];
+  it.each(cases)("matches $filters without conflating invocation and enabled state", ({ filters, ids }) => {
+    expect(
+      filterEntities(examples(), { ...base, skillFilters: { ...DEFAULT_SKILL_FILTERS, ...filters } }).map(
+        ({ entity }) => entity.data.id,
+      ),
+    ).toEqual(ids);
+  });
+
+  it("combines skill filters with agent, location, search, and visibility preferences", () => {
+    const options: FilterOptions = {
+      ...base,
+      agent: "codex",
+      location: { type: "project", root: "/work/repo" },
+      search: "shared",
+      skillFilters: { ...DEFAULT_SKILL_FILTERS, invocation: "allowed" },
+    };
+    expect(filterEntities(examples(), options).map(({ entity }) => entity.data.id)).toEqual(["allowed"]);
+    expect(filterEntities(examples(), { ...options, search: "missing" })).toEqual([]);
+    expect(
+      filterEntities(examples(), {
+        ...base,
+        showSystemSkills: false,
+        skillFilters: { ...DEFAULT_SKILL_FILTERS, builtIn: "yes" },
+      }),
+    ).toEqual([]);
+    expect(
+      filterEntities(examples(), {
+        ...base,
+        showAgentsDirSkills: false,
+        agentsDir: "/profile/.agents",
+        skillFilters: { ...DEFAULT_SKILL_FILTERS, installerManaged: "yes" },
+      }),
+    ).toEqual([]);
+  });
+
+  it("filters duplicate members before choosing the survivor and counting copies", () => {
+    const first = skill("allowed", "identical-markdown", "/work/first", "codex");
+    const second = skill("blocked", "identical-markdown", "/work/second", "codex");
+    const third = skill("also-blocked", "identical-markdown", "/work/third");
+    second.data.allowImplicitInvocation = false;
+    third.data.allowImplicitInvocation = false;
+    const options: FilterOptions = {
+      ...base,
+      skillFilters: { ...DEFAULT_SKILL_FILTERS, invocation: "blocked" },
+    };
+    expect(
+      filterEntities([first, second, third], options).map(({ entity, duplicateCount }) => [
+        entity.data.id,
+        duplicateCount,
+      ]),
+    ).toEqual([["blocked", 1]]);
+    expect(
+      filterEntities([first, second, third], { ...options, collapseDuplicates: false }).map(
+        ({ entity }) => entity.data.id,
+      ),
+    ).toEqual(["blocked", "also-blocked"]);
+  });
+
+  it("keeps sidebar totals and other entity kinds independent of skill filters", () => {
+    const data = snapshot({
+      skills: examples().map(({ data }) => data),
+      hooks: [{ id: "hook", event: "Stop", agent: "claude", scope: { type: "user" }, entries: [] }],
+    });
+    const options: FilterOptions = {
+      ...base,
+      skillFilters: { ...DEFAULT_SKILL_FILTERS, invocation: "unknown", enabled: "disabled" },
+    };
+    expect(filterEntities(entitiesOfKind(data, "skill"), options)).toEqual([]);
+    expect(filterEntities(entitiesOfKind(data, "hook"), options)).toHaveLength(1);
+    expect(countEntitiesByKind(data, options)).toMatchObject({ skill: 6, hook: 1 });
   });
 });
 

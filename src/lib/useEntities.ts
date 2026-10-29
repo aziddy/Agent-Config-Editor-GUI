@@ -19,6 +19,7 @@ function useEntityFilterOptions(): FilterOptions {
   const search = useUiStore((s) => s.search);
   const showDuplicates = useUiStore((s) => s.showDuplicates);
   const memorySource = useUiStore((s) => s.memorySource);
+  const skillFilters = useUiStore((s) => s.skillFilters);
   return useMemo(
     () => ({
       agent: agentFilter,
@@ -26,11 +27,21 @@ function useEntityFilterOptions(): FilterOptions {
       search,
       collapseDuplicates: !showDuplicates,
       memorySource,
+      skillFilters,
       showSystemSkills: settings.data?.showSystemSkills ?? false,
       showAgentsDirSkills: settings.data?.showAgentsDirSkills ?? true,
       agentsDir: snapshot.data?.homes?.agentsDir ?? null,
     }),
-    [snapshot.data, settings.data, agentFilter, locationFilter, search, showDuplicates, memorySource],
+    [
+      snapshot.data,
+      settings.data,
+      agentFilter,
+      locationFilter,
+      search,
+      showDuplicates,
+      memorySource,
+      skillFilters,
+    ],
   );
 }
 
@@ -58,7 +69,7 @@ export function useMemorySourceCounts(): Record<MemorySource, number> {
   return useMemo(() => countMemorySources(snapshot.data, options), [snapshot.data, options]);
 }
 
-/** Counts per kind honouring the list filters except text search (for the sidebar). */
+/** Sidebar totals honour provider, location, duplicate, and visibility preferences. */
 export function useKindCounts(): Record<EntityKind, number> {
   const snapshot = useSnapshot();
   const options = useEntityFilterOptions();

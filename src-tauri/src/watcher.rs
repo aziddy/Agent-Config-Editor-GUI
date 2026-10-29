@@ -1,7 +1,7 @@
 //! Filesystem watcher that tells the webview when config files change on disk.
 
 use crate::fsutil::Homes;
-use crate::model::{MemoryCategory, MemoryFile, MemorySource};
+use crate::model::{Agent, MemoryCategory, MemoryFile, MemorySource, Skill};
 use notify::RecursiveMode;
 use notify_debouncer_mini::{new_debouncer, DebounceEventResult, Debouncer};
 use serde::Serialize;
@@ -80,6 +80,15 @@ impl Interests {
 
 impl ConfigWatcher {
     pub fn start(app: AppHandle, recent: Arc<RecentWrites>) -> notify::Result<Self> {
+        Self::with_handler(recent, move |event| {
+            let _ = app.emit(EVENT_NAME, event);
+        })
+    }
+
+    fn with_handler(
+        recent: Arc<RecentWrites>,
+        on_changed: impl Fn(ConfigChanged) + Send + 'static,
+    ) -> notify::Result<Self> {
         let interests = Arc::new(Mutex::new(Interests::default()));
         let event_interests = interests.clone();
         let debouncer = new_debouncer(
@@ -101,7 +110,7 @@ impl ConfigWatcher {
                     paths.dedup();
                     if !paths.is_empty() {
                         log::debug!("config changed: {paths:?}");
-                        let _ = app.emit(EVENT_NAME, ConfigChanged { paths });
+                        on_changed(ConfigChanged { paths });
                     }
                 }
                 Err(e) => log::warn!("watch error: {e}"),
@@ -214,6 +223,48 @@ impl ConfigWatcher {
         }
     }
 
+    /// Plugin and linked skills can live outside the home/project watch roots.
+    pub fn watch_skills(&self, skills: &[Skill]) {
+        for skill in skills {
+            self.watch_skill_dir(Path::new(&skill.dir), skill.agent);
+        }
+    }
+
+    fn watch_skill_dir(&self, dir: &Path, agent: Agent) {
+        // Watch the skill directory so creating/removing agents/openai.yaml (or
+        // the agents directory itself) continues to work without rearming it.
+        self.watch_dir(dir);
+        let canonical_dir = dir.canonicalize().unwrap_or_else(|_| dir.to_path_buf());
+        if canonical_dir != dir {
+            self.watch_dir(&canonical_dir);
+        }
+        let mut files = vec!["SKILL.md"];
+        if agent == Agent::Codex {
+            files.push("agents/openai.yaml");
+        }
+        for relative in files {
+            let logical = dir.join(relative);
+            let canonical = logical
+                .canonicalize()
+                .unwrap_or_else(|_| canonical_dir.join(relative));
+            self.watch_file(&canonical);
+            if canonical != logical {
+                if let Ok(mut interests) = self.interests.lock() {
+                    interests
+                        .aliases
+                        .entry(canonical.clone())
+                        .or_default()
+                        .insert(logical.clone());
+                    interests
+                        .aliases
+                        .entry(logical)
+                        .or_default()
+                        .insert(canonical);
+                }
+            }
+        }
+    }
+
     /// Canonical targets and aliases both invalidate the logical editor query.
     pub fn watch_memories(&self, memories: &[MemoryFile]) {
         for memory in memories {
@@ -283,9 +334,10 @@ impl ConfigWatcher {
         let Ok(mut watched) = self.watched.lock() else {
             return;
         };
-        if watched
-            .get(path)
-            .is_some_and(|old| *old == RecursiveMode::Recursive || *old == mode)
+        if watched.get(path) == Some(&mode)
+            || watched
+                .iter()
+                .any(|(root, old)| *old == RecursiveMode::Recursive && path.starts_with(root))
         {
             return;
         }
@@ -314,6 +366,109 @@ fn is_noise(path: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn test_watcher() -> (ConfigWatcher, std::sync::mpsc::Receiver<ConfigChanged>) {
+        let (send, receive) = std::sync::mpsc::channel();
+        let watcher =
+            ConfigWatcher::with_handler(Arc::new(RecentWrites::default()), move |event| {
+                let _ = send.send(event);
+            })
+            .unwrap();
+        (watcher, receive)
+    }
+
+    #[test]
+    fn plugin_skill_watch_covers_metadata_creation_removal_and_recreation() {
+        let temp = tempfile::tempdir().unwrap();
+        let skill = temp.path().join("plugin/skills/demo");
+        std::fs::create_dir_all(&skill).unwrap();
+        let (watcher, changes) = test_watcher();
+        watcher.watch_skill_dir(&skill, Agent::Codex);
+        assert_eq!(
+            watcher.watched.lock().unwrap().get(&skill),
+            Some(&RecursiveMode::Recursive)
+        );
+        let metadata = skill.join("agents/openai.yaml");
+        assert!(watcher.interests.lock().unwrap().includes(&metadata));
+        assert!(watcher
+            .interests
+            .lock()
+            .unwrap()
+            .includes(&skill.join("agents")));
+        assert!(!watcher
+            .interests
+            .lock()
+            .unwrap()
+            .includes(&temp.path().join("unrelated.txt")));
+        for _ in 0..2 {
+            while changes.try_recv().is_ok() {}
+            std::fs::create_dir_all(metadata.parent().unwrap()).unwrap();
+            std::fs::write(&metadata, "policy: {}\n").unwrap();
+            let event = changes
+                .recv_timeout(Duration::from_secs(5))
+                .expect("metadata creation must invalidate the snapshot");
+            assert!(event
+                .paths
+                .iter()
+                .any(|p| p.ends_with("/agents") || p.ends_with("/agents/openai.yaml")));
+            while changes.try_recv().is_ok() {}
+            std::fs::write(&metadata, "policy: {allow_implicit_invocation: false}\n").unwrap();
+            let event = changes
+                .recv_timeout(Duration::from_secs(5))
+                .expect("metadata edits must invalidate the snapshot");
+            assert!(event
+                .paths
+                .iter()
+                .any(|p| p.ends_with("/agents/openai.yaml")));
+            while changes.try_recv().is_ok() {}
+            std::fs::remove_dir_all(metadata.parent().unwrap()).unwrap();
+            let event = changes
+                .recv_timeout(Duration::from_secs(5))
+                .expect("metadata removal must invalidate the snapshot");
+            assert!(event
+                .paths
+                .iter()
+                .any(|p| p.ends_with("/agents") || p.ends_with("/agents/openai.yaml")));
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn linked_skill_metadata_events_invalidate_the_logical_file_query() {
+        let temp = tempfile::tempdir().unwrap();
+        let target = temp.path().join("shared");
+        std::fs::create_dir_all(&target).unwrap();
+        let alias = temp.path().join("linked");
+        std::os::unix::fs::symlink(&target, &alias).unwrap();
+        let (watcher, _changes) = test_watcher();
+        watcher.watch_skill_dir(&alias, Agent::Codex);
+        let canonical = target.canonicalize().unwrap().join("agents/openai.yaml");
+        let interests = watcher.interests.lock().unwrap();
+        assert!(interests.includes(&canonical));
+        assert!(interests.expand(canonical).contains(
+            &alias
+                .join("agents/openai.yaml")
+                .to_string_lossy()
+                .into_owned()
+        ));
+    }
+
+    #[test]
+    fn existing_recursive_watches_cover_skills_without_registering_each_subdirectory() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().canonicalize().unwrap();
+        let skill = root.join("skills/demo");
+        std::fs::create_dir_all(skill.join("agents")).unwrap();
+        let (watcher, _changes) = test_watcher();
+        watcher.watch_dir(&root);
+        watcher.watch_skill_dir(&skill, Agent::Codex);
+        assert_eq!(watcher.watched.lock().unwrap().len(), 1);
+        assert!(watcher
+            .interests
+            .lock()
+            .unwrap()
+            .includes(&skill.join("agents/openai.yaml")));
+    }
 
     #[test]
     fn memory_interests_exclude_transcripts_and_unrelated_source_edits() {

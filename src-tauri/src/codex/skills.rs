@@ -155,6 +155,24 @@ pub fn read_skill(
         .unwrap_or(dir_name);
     let description = field_str(&parsed.frontmatter, "description").map(|d| d.trim().to_string());
     let path_str = fsutil::display(skill_md);
+    let policy_path = dir.join("agents/openai.yaml");
+    let allow_implicit_invocation = match read_text_opt(&policy_path) {
+        Ok(None) => Some(true),
+        Ok(Some(text)) => {
+            out.record_hash(&policy_path, &text);
+            match super::skill_policy::parse(&text, &policy_path) {
+                Ok(allowed) => Some(allowed),
+                Err(error) => {
+                    out.warn(Some(&policy_path), error.message);
+                    None
+                }
+            }
+        }
+        Err(error) => {
+            out.warn(Some(&policy_path), error.message);
+            None
+        }
+    };
 
     let enabled = match config.skills_entry(&path_str, &name) {
         Some(entry) => {
@@ -200,6 +218,7 @@ pub fn read_skill(
         },
         dir: fsutil::display(dir),
         enabled,
+        allow_implicit_invocation,
         frontmatter: parsed.frontmatter,
         is_system,
         lock_managed,

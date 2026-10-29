@@ -296,6 +296,40 @@ export function entitySearchText(e: AnyEntity): string {
   return parts.join(" ").toLowerCase();
 }
 
+export interface SkillFilters {
+  invocation: "all" | "allowed" | "blocked" | "unknown";
+  enabled: "all" | "enabled" | "disabled" | "notApplicable";
+  builtIn: "all" | "yes" | "no";
+  installerManaged: "all" | "yes" | "no";
+}
+
+export const DEFAULT_SKILL_FILTERS: Readonly<SkillFilters> = {
+  invocation: "all",
+  enabled: "all",
+  builtIn: "all",
+  installerManaged: "all",
+};
+
+export function hasSkillFilters(filters: SkillFilters): boolean {
+  return Object.values(filters).some((value) => value !== "all");
+}
+
+function matchesSkillFilters(skill: Skill, filters: SkillFilters): boolean {
+  if (filters.invocation !== "all") {
+    const allowed = { allowed: true, blocked: false, unknown: null }[filters.invocation];
+    if (skill.allowImplicitInvocation !== allowed) return false;
+  }
+  if (filters.enabled !== "all") {
+    const enabled = { enabled: true, disabled: false, notApplicable: null }[filters.enabled];
+    if (skill.enabled.enabled !== enabled) return false;
+  }
+  if (filters.builtIn !== "all" && skill.isSystem !== (filters.builtIn === "yes")) return false;
+  if (filters.installerManaged !== "all" && skill.lockManaged !== (filters.installerManaged === "yes")) {
+    return false;
+  }
+  return true;
+}
+
 export interface FilterOptions {
   agent: "all" | Agent;
   location: LocationFilter;
@@ -305,6 +339,7 @@ export interface FilterOptions {
   showAgentsDirSkills: boolean;
   agentsDir: string | null;
   memorySource?: "all" | MemorySource;
+  skillFilters?: SkillFilters;
 }
 
 /** Duplicate members other than the first of their group are hidden; the survivor gets a count. */
@@ -336,6 +371,7 @@ export function filterEntities(
       continue;
     }
     if (search && !entitySearchText(e).includes(search)) continue;
+    if (e.kind === "skill" && opts.skillFilters && !matchesSkillFilters(e.data, opts.skillFilters)) continue;
     const group = "dupGroup" in e.data ? e.data.dupGroup : null;
     if (group && opts.collapseDuplicates) {
       const count = seenGroups.get(group);
@@ -352,7 +388,7 @@ export function filterEntities(
   return out;
 }
 
-/** Sidebar totals retain provider/location filters, independent of search and source. */
+/** Sidebar totals retain provider/location filters, independent of search and kind-specific filters. */
 export function countEntitiesByKind(snapshot: Snapshot, opts: FilterOptions): Record<EntityKind, number> {
   const counts: Record<EntityKind, number> = {
     skill: 0,
@@ -369,6 +405,7 @@ export function countEntitiesByKind(snapshot: Snapshot, opts: FilterOptions): Re
       ...opts,
       search: "",
       memorySource: "all",
+      skillFilters: DEFAULT_SKILL_FILTERS,
     }).length;
   }
   return counts;

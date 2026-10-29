@@ -59,6 +59,8 @@ export interface Skill {
   origin: Origin;
   dir: string;
   enabled: EnabledState;
+  /** Configured invocation policy; null when its metadata could not be read or parsed. */
+  allowImplicitInvocation: boolean | null;
   frontmatter: Frontmatter;
   isSystem: boolean;
   lockManaged: boolean;

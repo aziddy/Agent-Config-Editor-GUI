@@ -37,12 +37,16 @@ fn implicit_invocation(map: &Mapping, path: &Path) -> AppResult<bool> {
 
 pub fn read(path: &Path) -> AppResult<CodexSkillInvocation> {
     let text = read_text_opt(path)?;
-    let map = root(text.as_deref().unwrap_or(""), path)?;
     Ok(CodexSkillInvocation {
         path: display(path),
         base_hash: text.as_ref().map(|t| sha256_hex(t.as_bytes())),
-        allow_implicit_invocation: implicit_invocation(&map, path)?,
+        allow_implicit_invocation: parse(text.as_deref().unwrap_or(""), path)?,
     })
+}
+
+/// Shared by the detail editor and scanner, which records the file hash before parsing.
+pub fn parse(text: &str, path: &Path) -> AppResult<bool> {
+    implicit_invocation(&root(text, path)?, path)
 }
 
 fn verifies(text: &str, expected: &Value) -> bool {

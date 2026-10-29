@@ -2,6 +2,8 @@
 
 A desktop app for seeing and editing everything you have configured for **Claude Code** and **OpenAI Codex CLI** on your machine: skills, MCP servers, plugins, subagents, slash commands, hooks and Codex automations. Filter by agent, kind and scope; toggle what can be toggled; edit with forms or a raw editor; reveal any entity in Finder or open it in your editor.
 
+The **Skills** list also filters by implicit invocation, enabled state, built-in status, and installer-managed status. Invocation uses Codex’s `agents/openai.yaml` policy or Claude’s `disable-model-invocation` frontmatter; missing settings allow automatic use, and unreadable policies appear as **Unknown**. Claude skills have **No enable switch**. Filters combine with agent, location, and search, respect visibility Settings, and remain selected during the current app session. **Clear skill filters** resets just these four controls.
+
 Select a Codex automation and open **Runs** to read its local run history, including archived conversations and expandable tool activity. History refreshes while visible, loads large outputs in chunks, and never changes the automation or marks a run read, accepted, or archived.
 
 Built with Tauri 2 (Rust) + React/TypeScript. macOS first; Linux builds too.

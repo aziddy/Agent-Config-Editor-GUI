@@ -86,6 +86,7 @@ pub async fn scan_all(state: State<'_, AppState>) -> AppResult<Snapshot> {
             w.watch_project(Path::new(&p.root), &state.homes);
         }
         w.watch_memories(&snapshot.memories);
+        w.watch_skills(&snapshot.skills);
     }
     Ok(snapshot)
 }

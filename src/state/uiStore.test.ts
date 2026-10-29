@@ -1,7 +1,69 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { DEFAULT_SKILL_FILTERS } from "@/lib/entities";
 import { useUiStore } from "./uiStore";
 
 afterEach(() => useUiStore.setState(useUiStore.getInitialState(), true));
+
+it("retains skill filters across navigation and agents, then clears them for direct skill links", async () => {
+  const actions = useUiStore.getState();
+  const skillFilters = {
+    ...DEFAULT_SKILL_FILTERS,
+    invocation: "blocked" as const,
+    installerManaged: "yes" as const,
+  };
+  await actions.select("current-skill");
+  actions.setDetailTab("editor");
+  await actions.setSkillFilters(skillFilters);
+  expect(useUiStore.getState()).toMatchObject({ skillFilters, selectedId: null, detailTab: "overview" });
+  await actions.setNav("plugin");
+  await actions.setAgentFilter("codex");
+  await actions.setNav("skill");
+  expect(useUiStore.getState().skillFilters).toEqual(skillFilters);
+  await actions.select("linked-skill");
+  actions.setDetailTab("editor");
+  actions.setNavigationGuard(() => false);
+  expect(await actions.navigateToEntity("skill", "linked-skill")).toBe(false);
+  expect(useUiStore.getState()).toMatchObject({
+    skillFilters,
+    selectedId: "linked-skill",
+    detailTab: "editor",
+  });
+  actions.setNavigationGuard(() => true);
+  await actions.navigateToEntity("skill", "linked-skill");
+  expect(useUiStore.getState()).toMatchObject({
+    skillFilters: DEFAULT_SKILL_FILTERS,
+    selectedId: "linked-skill",
+    detailTab: "overview",
+  });
+});
+
+it("guards clearing skill filters and preserves the other filters", async () => {
+  const actions = useUiStore.getState();
+  const skillFilters = { ...DEFAULT_SKILL_FILTERS, enabled: "disabled" as const };
+  await actions.setSkillFilters(skillFilters);
+  await actions.setAgentFilter("codex");
+  await actions.setLocationFilter({ type: "project", root: "/work/repo" });
+  actions.setSearch("shared");
+  await actions.select("current-skill");
+  actions.setDetailTab("editor");
+  actions.setNavigationGuard(() => false);
+  expect(await actions.setSkillFilters(DEFAULT_SKILL_FILTERS)).toBe(false);
+  expect(useUiStore.getState()).toMatchObject({
+    skillFilters,
+    selectedId: "current-skill",
+    detailTab: "editor",
+  });
+  actions.setNavigationGuard(() => true);
+  await actions.setSkillFilters(DEFAULT_SKILL_FILTERS);
+  expect(useUiStore.getState()).toMatchObject({
+    skillFilters: DEFAULT_SKILL_FILTERS,
+    selectedId: null,
+    detailTab: "overview",
+    search: "shared",
+    agentFilter: "codex",
+    locationFilter: { type: "project", root: "/work/repo" },
+  });
+});
 
 it("starts expanded and folds each sidebar without resetting the current edit or filters", () => {
   const actions = useUiStore.getState();
@@ -106,6 +168,11 @@ describe("editor navigation guard", () => {
     { name: "entity selection", navigate: () => useUiStore.getState().select("other-skill") },
     { name: "category", navigate: () => useUiStore.getState().setNav("automation") },
     { name: "agent filter", navigate: () => useUiStore.getState().setAgentFilter("codex") },
+    {
+      name: "skill filter",
+      navigate: () =>
+        useUiStore.getState().setSkillFilters({ ...DEFAULT_SKILL_FILTERS, invocation: "blocked" }),
+    },
     { name: "memory source", navigate: () => useUiStore.getState().navigateToMemorySource("automation") },
     {
       name: "location filter",
@@ -133,6 +200,7 @@ describe("editor navigation guard", () => {
         agentFilter: before.agentFilter,
         locationFilter: before.locationFilter,
         memorySource: before.memorySource,
+        skillFilters: before.skillFilters,
         detailTab: before.detailTab,
         search: before.search,
         navigationPending: false,
@@ -243,6 +311,7 @@ describe("editor navigation guard", () => {
     await actions.navigateToEntity("skill", "current-skill");
     await actions.setAgentFilter("all");
     await actions.setLocationFilter({ type: "all" });
+    await actions.setSkillFilters({ ...DEFAULT_SKILL_FILTERS });
     expect(guard).not.toHaveBeenCalled();
     expect(useUiStore.getState()).toMatchObject({ selectedId: "current-skill", detailTab: "editor" });
   });

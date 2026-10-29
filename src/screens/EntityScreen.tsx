@@ -2,6 +2,7 @@ import { Plus } from "lucide-react";
 import { useState } from "react";
 import { DetailPane } from "@/components/DetailPane";
 import { EntityList, type Row } from "@/components/EntityList";
+import { SkillFilterBar } from "@/components/SkillFilterBar";
 import { TopBar } from "@/components/TopBar";
 import { Button } from "@/components/ui/button";
 import {
@@ -31,6 +32,10 @@ function useRowBuilder() {
           ...base,
           subtitle: s.description ?? s.dir,
           enabled: s.enabled,
+          warning:
+            s.allowImplicitInvocation === null
+              ? "Invocation policy could not be read; see scan warnings"
+              : undefined,
           onToggle: (enabled) =>
             void requestPlan(() => rpc("preview_set_skill_enabled", { skillId: s.id, enabled })),
         };
@@ -139,6 +144,7 @@ export function EntityScreen({ kind }: { kind: EntityKind }) {
           ) : undefined
         }
       />
+      {kind === "skill" && <SkillFilterBar count={rows.length} loading={snapshot.isPending} />}
       <div className="flex min-h-0 flex-1">
         <div
           id="entity-list"

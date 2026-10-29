@@ -66,6 +66,32 @@ fn scan(root: &Path) -> Snapshot {
     scan_all(&Homes::for_test(root), &AppSettings::default())
 }
 
+#[test]
+fn invocation_policy_is_scanned_for_user_system_installer_plugin_and_project_skills() {
+    let (_tmp, root) = make_home();
+    let initial = scan(&root);
+    for name in ["one", "sys", "locked", "ps", "proj"] {
+        let skill = initial
+            .skills
+            .iter()
+            .find(|skill| skill.name == name)
+            .unwrap();
+        assert_eq!(skill.allow_implicit_invocation, Some(true));
+        let metadata = Path::new(&skill.dir).join("agents/openai.yaml");
+        fs::create_dir_all(metadata.parent().unwrap()).unwrap();
+        fs::write(metadata, "policy: {allow_implicit_invocation: false}\n").unwrap();
+    }
+    let snapshot = scan(&root);
+    for name in ["one", "sys", "locked", "ps", "proj"] {
+        let skill = snapshot
+            .skills
+            .iter()
+            .find(|skill| skill.name == name)
+            .unwrap();
+        assert_eq!(skill.allow_implicit_invocation, Some(false), "{name}");
+    }
+}
+
 /// Warnings that concern the Codex side of the fixture (the Claude readers run on it too).
 fn codex_warnings(snapshot: &Snapshot) -> Vec<&Warning> {
     snapshot
